@@ -58,6 +58,7 @@ module axi4lite_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
     // Write transaction
     state int#(FROM: 0, TO: ATO) waddr
     state bool waddr_valid
+    state bool wsubaddr_valid
     state bool[2] bresp_resp
     state bool bresp_valid
 
@@ -68,6 +69,7 @@ module axi4lite_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
 
     when awready & awvalid {
         waddr_valid = true
+        wsubaddr_valid = (awaddr % 16) == 0
         waddr = awaddr / REG_STRIDE
     }
     when wready & wvalid {
@@ -75,17 +77,19 @@ module axi4lite_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
         bresp_valid = true
 
         bresp_resp = RESP_OKAY
-        when waddr == 0 {
-            when wstrb[0] & wdata[0] {
-                start()
+        when wsubaddr_valid {
+            when waddr == 0 {
+                when wstrb[0] & wdata[0] {
+                    start()
+                }
             }
-        }
-        // Data Write
-        when (waddr >= FIRST_ARG) & (waddr < REG_STRIDE * NUM_ARGS + FIRST_ARG) {
-            int write_idx = unsafe_int_cast#(FROM: FIRST_ARG, TO: FIRST_ARG + NUM_ARGS)(waddr) - FIRST_ARG
-            for int strbi in 0..DATA_BYTES {
-                when wstrb[strbi] {
-                    args[write_idx][strbi*8 +: 8] = wdata[strbi*8 +: 8]
+            // Data Write
+            when (waddr >= FIRST_ARG) & (waddr < NUM_ARGS + FIRST_ARG) {
+                int write_idx = unsafe_int_cast#(FROM: FIRST_ARG, TO: FIRST_ARG + NUM_ARGS)(waddr) - FIRST_ARG
+                for int strbi in 0..DATA_BYTES {
+                    when wstrb[strbi] {
+                        args[write_idx][strbi*8 +: 8] = wdata[strbi*8 +: 8]
+                    }
                 }
             }
         }
@@ -108,15 +112,19 @@ module axi4lite_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
         rdata_valid = true
         rdata_resp = RESP_OKAY
         rdata_data = Repeat(false)
+
         int raddr = araddr / REG_STRIDE
-        // Result Read
-        when raddr == 1 {
-            rdata_data = result
-        }
-        // Args Read
-        when (raddr >= FIRST_ARG) & (raddr < REG_STRIDE * NUM_ARGS + FIRST_ARG) {
-            int read_idx = unsafe_int_cast#(FROM: FIRST_ARG, TO: FIRST_ARG + NUM_ARGS)(raddr) - FIRST_ARG
-            rdata_data = args[read_idx]
+        bool valid_addr = (araddr % 16) == 0
+        when valid_addr {
+            // Result Read
+            when raddr == 1 {
+                rdata_data = result
+            }
+            // Args Read
+            when (raddr >= FIRST_ARG) & (raddr < NUM_ARGS + FIRST_ARG) {
+                int read_idx = unsafe_int_cast#(FROM: FIRST_ARG, TO: FIRST_ARG + NUM_ARGS)(raddr) - FIRST_ARG
+                rdata_data = args[read_idx]
+            }
         }
     }
     when rready & rvalid {

@@ -62,9 +62,9 @@ class Axi4Lite:
         set_unassigned(self.awaddr)
         set_unassigned(self.awprot)
 
-    async def w(self, data):
+    async def w(self, data, strb = -1):
         self.wdata.value = data
-        self.wstrb.value = -1
+        self.wstrb.value = strb
         self.wvalid.value = True
         while True:
             await (RisingEdge(self.clk))
@@ -116,11 +116,15 @@ async def test(dut):
     dut.aclk.value = 0
     dut.aresetn.value = 0
     ctrl = Axi4Lite(dut, dut.aclk, 's_axi_control_')
-    clk = cocotb.start_soon(clock(dut, 20))
+    clk = cocotb.start_soon(clock(dut, 30))
     await reset(dut)
 
     cocotb.start_soon(ctrl.aw(0x20))
     cocotb.start_soon(ctrl.w(4))
+    await ctrl.b()
+
+    cocotb.start_soon(ctrl.aw(0x28))
+    cocotb.start_soon(ctrl.w(0))
     await ctrl.b()
 
     cocotb.start_soon(ctrl.aw(0x30))
@@ -136,9 +140,13 @@ async def test(dut):
     #    if dut.intr.value:
     #        break
 
+    cocotb.start_soon(ctrl.ar(0x20))
+    arg0 = await ctrl.r()
+    cocotb.start_soon(ctrl.ar(0x30))
+    arg1 = await ctrl.r()
     cocotb.start_soon(ctrl.ar(0x10))
     result = await ctrl.r()
-    print(f'result: {int(result)}')
+    print(f'{int(arg0)} + {int(arg1)} = {int(result)}')
 
     await clk
     print("done")
