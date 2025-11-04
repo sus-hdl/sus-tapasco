@@ -1,0 +1,187 @@
+
+
+module axi4lite_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
+    assert#(C: NUM_ARGS >= 0)
+    assert#(C: ADDR_WIDTH >= 12)
+    assert#(C: DATA_WIDTH == 32 | DATA_WIDTH == 64)
+    gen int ATO = pow2#(E: ADDR_WIDTH)
+    gen int DATA_BYTES = DATA_WIDTH / 8
+    gen int REG_STRIDE = 16
+    gen int FIRST_ARG = 2
+
+    domain aclk
+    input bool aresetn'0
+
+    output state bool [DATA_WIDTH][NUM_ARGS] args'0
+
+    state bool [DATA_WIDTH] result
+
+    action write'0 : bool [DATA_WIDTH] _data'0 {
+        result = _data
+    }
+
+    trigger start'0
+
+    output state bool intr'0
+    intr = false
+    action finish'0 {
+        intr = true
+    }
+
+    gen bool[2] RESP_OKAY = [false, false]
+
+    // AXI signals
+    input int#(FROM: 0, TO: ATO) araddr'0
+    input bool[3] arprot'0
+    input bool arvalid'0
+    output bool arready'0 = false
+
+    output bool[DATA_WIDTH] rdata'0
+    output bool[2] rresp'0
+    output bool rvalid'0 = false
+    input bool rready'0
+
+    input int#(FROM: 0, TO: ATO) awaddr'0
+    input bool[3] awprot'0
+    input bool awvalid'0
+    output bool awready'0 = false
+
+    input bool[DATA_WIDTH] wdata'0
+    input bool[DATA_WIDTH / 8] wstrb'0
+    input bool wvalid'0
+    output bool wready'0 = false
+
+    output bool[2] bresp'0
+    output bool bvalid'0 = false
+    input bool bready'0
+
+    // Write transaction
+    state int#(FROM: 0, TO: ATO) waddr
+    state bool waddr_valid
+    state bool[2] bresp_resp
+    state bool bresp_valid
+
+    awready = !waddr_valid & aresetn // Force low on reset
+    wready = waddr_valid & !bresp_valid // Already low by reset
+    bvalid = bresp_valid
+    bresp = bresp_resp
+
+    when awready & awvalid {
+        waddr_valid = true
+        waddr = awaddr / REG_STRIDE
+    }
+    when wready & wvalid {
+        waddr_valid = false
+        bresp_valid = true
+
+        bresp_resp = RESP_OKAY
+        when waddr == 0 {
+            when wstrb[0] & wdata[0] {
+                start()
+            }
+        }
+        // Data Write
+        when (waddr >= FIRST_ARG) & (waddr < REG_STRIDE * NUM_ARGS + FIRST_ARG) {
+            int write_idx = unsafe_int_cast#(FROM: FIRST_ARG, TO: FIRST_ARG + NUM_ARGS)(waddr) - FIRST_ARG
+            for int strbi in 0..DATA_BYTES {
+                when wstrb[strbi] {
+                    args[write_idx][strbi*8 +: 8] = wdata[strbi*8 +: 8]
+                }
+            }
+        }
+    }
+    when bready & bvalid {
+        bresp_valid = false
+    }
+
+    // Read transaction
+    state bool rdata_valid
+    state bool[32] rdata_data
+    state bool[2] rdata_resp
+    rdata = rdata_data
+    rresp = rdata_resp
+
+    arready = !rdata_valid & aresetn // Force low on reset
+    rvalid = rdata_valid // Already low by reset
+
+    when arready & arvalid {
+        rdata_valid = true
+        rdata_resp = RESP_OKAY
+        rdata_data = Repeat(false)
+        int raddr = araddr / REG_STRIDE
+        // Result Read
+        when raddr == 1 {
+            rdata_data = result
+        }
+        // Args Read
+        when (raddr >= FIRST_ARG) & (raddr < REG_STRIDE * NUM_ARGS + FIRST_ARG) {
+            int read_idx = unsafe_int_cast#(FROM: FIRST_ARG, TO: FIRST_ARG + NUM_ARGS)(raddr) - FIRST_ARG
+            rdata_data = args[read_idx]
+        }
+    }
+    when rready & rvalid {
+        rdata_valid = false
+    }
+
+    when !aresetn {
+        waddr_valid = false
+        bresp_valid = false
+        rdata_valid = false
+    }
+}
+
+module example {
+    domain aclk
+    input bool aresetn
+
+    gen int ADDR_WIDTH = 12
+    gen int ATO = pow2#(E: ADDR_WIDTH)
+    gen int DATA_WIDTH = 32
+
+    axi4lite_ctrl_slave #(NUM_ARGS: 2, ADDR_WIDTH, DATA_WIDTH) axi_control
+    axi_control.aresetn = aresetn
+
+    // Export AXI4-Lite interface
+    input  int#(FROM: 0, TO: ATO) s_axi_control_awaddr
+    input  bool[3]                s_axi_control_awprot
+    input  bool                   s_axi_control_awvalid
+    output bool                   s_axi_control_awready = axi_control.awready
+    input  bool[DATA_WIDTH]       s_axi_control_wdata
+    input  bool[DATA_WIDTH / 8]   s_axi_control_wstrb
+    input  bool                   s_axi_control_wvalid
+    output bool                   s_axi_control_wready  = axi_control.wready
+    output bool[2]                s_axi_control_bresp   = axi_control.bresp
+    output bool                   s_axi_control_bvalid  = axi_control.bvalid
+    input  bool                   s_axi_control_bready
+    input  int#(FROM: 0, TO: ATO) s_axi_control_araddr
+    input  bool[3]                s_axi_control_arprot
+    input  bool                   s_axi_control_arvalid
+    output bool                   s_axi_control_arready = axi_control.arready
+    output bool[DATA_WIDTH]       s_axi_control_rdata   = axi_control.rdata
+    output bool[2]                s_axi_control_rresp   = axi_control.rresp
+    output bool                   s_axi_control_rvalid  = axi_control.rvalid
+    input  bool                   s_axi_control_rready
+    output bool                   intr = axi_control.intr
+    axi_control.awaddr  = s_axi_control_awaddr
+    axi_control.awprot  = s_axi_control_awprot
+    axi_control.awvalid = s_axi_control_awvalid
+    axi_control.wdata   = s_axi_control_wdata
+    axi_control.wstrb   = s_axi_control_wstrb
+    axi_control.wvalid  = s_axi_control_wvalid
+    axi_control.bready  = s_axi_control_bready
+    axi_control.araddr  = s_axi_control_araddr
+    axi_control.arprot  = s_axi_control_arprot
+    axi_control.arvalid = s_axi_control_arvalid
+    axi_control.rready  = s_axi_control_rready
+
+    // Actual logic
+    when axi_control.start {
+        int a = BitsToUInt(axi_control.args[0])
+        int b = BitsToUInt(axi_control.args[1])
+
+        int c = (a + b) % pow2#(E: 32)
+
+        axi_control.write(UIntToBits(c))
+        axi_control.finish()
+    }
+}
