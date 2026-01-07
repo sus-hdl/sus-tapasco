@@ -1,0 +1,107 @@
+
+/// A Bursting AXI Memory reader. Requires a FIFO
+module axi_array_burst_reader #(int ATO, int DATA_WIDTH) {
+    domain aclk
+    input bool aresetn'0
+
+    gen int AXI_WIDTH_BYTES = DATA_WIDTH / 8
+    gen int AxSIZE = clog2#(V: AXI_WIDTH_BYTES)
+
+    /// Check AXI_WIDTH is a power of two
+    assert#(C: pow2#(E: AxSIZE) * 8 == DATA_WIDTH)
+    /// AXI standard supported AXI_WIDTHs: 8 - 1024
+    assert#(C: (AxSIZE >= 0) & (AxSIZE < 8))
+
+    gen int MAX_AXI_ALIGNMENT = pow2#(E: 12) // 4kb page size, a burst cannot cross a 4K boundary
+    gen int MAX_BURST = MAX_AXI_ALIGNMENT / AXI_WIDTH_BYTES
+
+    if MAX_BURST > 256 { // Limited to 256 for BURST_INCR - AXI4. (16 if AXI3, but we only support AXI4)
+        MAX_BURST = 256
+    }
+
+    // axi interface
+    output bool                           arvalid'0
+    input  bool                           arready'0
+    output int#(FROM: 0, TO: ATO)         araddr'0
+    output int#(FROM: 0, TO: 256)         arlen'0
+    output int#(FROM: 0, TO: 8)           arsize'0 = clog2#(V: DATA_WIDTH / 8)
+    output bool[2]                        arburst'0 = 2'b01 // BURST_INC
+    output bool[3]                        arprot'0 = 3'b000 // Unprivileged, Secure, Data Access
+    output bool[4]                        arcache'0 = 4'b0010 // Not bufferable, but can be broken up (into 128-bit, or other)
+    output int#(FROM: 0, TO: 16)          arqos'0 = 0 // Lowest priority
+    output bool                           arlock'0 = false // NORMAL - No atomics
+    output int#(FROM: 0, TO: 16)          arregion'0 = 0 // Region 0
+    input  bool                           rvalid'0
+    output bool                           rready'0
+    input  bool[DATA_WIDTH]               rdata'0
+    input  bool[2]                        rresp'0
+    input  bool                           rlast'0
+    bool[2] _rresp = rresp
+    bool _rlast = rlast
+
+    // Address
+    state int#(FROM: 0, TO: ATO) addr
+    state int#(FROM: 0, TO: ATO) count
+
+    fifo #(DEPTH: 4, THRESHOLD: 0) data_burst_count_fifo
+    data_burst_count_fifo.aresetn = aresetn
+    int _data_burst_count_fifo_occupation = data_burst_count_fifo.occupation
+
+    output bool may_request_new_burst'0 = count == 0 & data_burst_count_fifo.may_push
+    action request_new_burst'0 : int#(FROM: 0, TO: ATO) _addr'0, int#(FROM: 0, TO: ATO) _count'0 {
+        addr = _addr
+        count = _count + 1 mod ATO
+        data_burst_count_fifo.push(_count + 1 mod ATO)
+    }
+
+    int#(FROM: 0, TO: MAX_BURST+1) next_burst_count
+    int#(FROM: 0, TO: MAX_BURST+1) next_burst_count_2
+    next_burst_count_2 = MAX_BURST - ((addr / AXI_WIDTH_BYTES) mod MAX_BURST)
+    when count < next_burst_count_2 {
+        next_burst_count = count mod MAX_BURST
+    } else {
+        next_burst_count = next_burst_count_2
+    }
+
+    arvalid = count != 0 & data_burst_count_fifo.may_push
+    araddr = addr
+    arlen = next_burst_count - 1 mod MAX_BURST
+    when arvalid & arready {
+        addr = (addr + next_burst_count * AXI_WIDTH_BYTES) mod ATO
+        count = count - next_burst_count mod ATO
+    }
+
+    // Data
+    state int#(FROM: 0, TO: ATO) data_burst_count_remaining
+    fifo #(DEPTH: 4, THRESHOLD: 0) rd_fifo
+    rd_fifo.aresetn = aresetn
+    int _rd_fifo_occupation = rd_fifo.occupation
+
+    output bool may_read = rd_fifo.may_pop
+    output bool[DATA_WIDTH] rd_data = rd_fifo.first
+    output bool rd_last = data_burst_count_remaining == 1
+    action read'0 {
+        rd_fifo.pop()
+        when data_burst_count_remaining != 0 {
+            data_burst_count_remaining = data_burst_count_remaining - 1 mod ATO
+        }
+    }
+
+    rready = rd_fifo.may_push & data_burst_count_remaining != 0
+    when rready & rvalid {
+        rd_fifo.push(rdata)
+    }
+
+    when data_burst_count_remaining == 0 {
+        when data_burst_count_fifo.may_pop {
+            data_burst_count_remaining = data_burst_count_fifo.first
+            data_burst_count_fifo.pop()
+        }
+    }
+
+    when !aresetn {
+        data_burst_count_remaining = 0
+        count = 0
+    }
+
+}

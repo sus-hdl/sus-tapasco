@@ -1,0 +1,59 @@
+[{
+    "Job": "Compose",
+    "Design Frequency": 322,
+    "SkipSynthesis": false,
+    "DeleteProjects": false,
+    "Platforms": [
+      "AU280"
+    ],
+    "Architectures": [
+      "axi4mm"
+    ],
+    "Composition": {
+      "Composition": [
+        {
+          "Kernel": "ethernet_example",
+          "Count": 1
+        }
+      ]
+    },
+    "Features": [{
+        "Feature" : "SFPPLUS",
+        "Properties" : {
+          "ports" : [ {
+            "name" : "port0",
+            "mode" : "singular",
+            "physical_port" : "0",
+            "ic_sync" : "true"
+          }, {
+            "name" : "port1",
+            "mode" : "singular",
+            "physical_port" : "1",
+            "ic_sync" : "true"
+          } ],
+      "pes" : [ {
+            "ID" : "ethernet_example",
+            "Count" : "1",
+            "mappings" : [ {
+              "interface" : "SAXIS0",
+              "direction" : "rx",
+              "port" : "port1"
+            }, {
+              "interface" : "MAXIS0",
+              "direction" : "tx",
+              "port" : "port0"
+            }, {
+              "interface" : "SAXIS1",
+              "direction" : "rx",
+              "port" : "port0"
+            }, {
+              "interface" : "MAXIS1",
+              "direction" : "tx",
+              "port" : "port1"
+            } ]
+      } ],
+      "enabled" : "true",
+      "mode" : "100G"
+    }
+  }]
+}]

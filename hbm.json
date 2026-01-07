@@ -1,0 +1,31 @@
+[{
+    "Job": "Compose",
+    "Design Frequency": 300,
+    "SkipSynthesis": false,
+    "DeleteProjects": false,
+    "Platforms": [
+      "AU280"
+    ],
+    "Architectures": [
+      "axi4mm"
+    ],
+    "Composition": {
+      "Composition": [
+        {
+          "Kernel": "array_init_update_sum",
+          "Count": 32
+        }
+      ]
+    },
+    "Features" : [ {
+      "Feature" : "HBM",
+      "Properties" : {
+        "hbm0" : {
+          "ID" : "array_init_update_sum",
+          "Count" : "32",
+          "Interfaces" : "maxi"
+        },
+        "enabled" : "true"
+      }
+    } ]
+}]

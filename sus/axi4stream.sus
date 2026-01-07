@@ -1,0 +1,52 @@
+
+module axi4stream_slave #(int DATA_WIDTH, int USER_WIDTH, int DEST_WIDTH) {
+    output bool ready
+    input bool valid
+    input bool [DATA_WIDTH] data
+    input bool [DATA_WIDTH/8] keep
+    input bool [DATA_WIDTH/8] strb
+    input bool [USER_WIDTH] user
+    input bool [DEST_WIDTH] dest
+    input bool last
+
+    action may_fire {
+        ready = true
+
+        trigger fire : bool [DATA_WIDTH] _data, bool [DATA_WIDTH/8] _keep, bool [DATA_WIDTH/8] _strb, bool [USER_WIDTH] _user, bool [DEST_WIDTH] _dest, bool _last
+
+        when valid {
+            fire(data, keep, strb, user, dest, last)
+        }
+    } else {
+        ready = false
+    }
+}
+
+module axi4stream_master #(int DATA_WIDTH, int USER_WIDTH, int DEST_WIDTH) {
+    input bool ready
+    output bool valid
+    output bool [DATA_WIDTH] data
+    output bool [DATA_WIDTH/8] keep
+    output bool [DATA_WIDTH/8] strb
+    output bool [USER_WIDTH] user
+    output bool [DEST_WIDTH] dest
+    output bool last
+
+    action may_fire : bool [DATA_WIDTH] _data, bool [DATA_WIDTH/8] _keep, bool [DATA_WIDTH/8] _strb, bool [USER_WIDTH] _user, bool [DEST_WIDTH] _dest, bool _last {
+        valid = true
+        data = _data
+        keep = _keep
+        strb = _strb
+        user = _user
+        dest = _dest
+        last = _last
+
+        trigger fire
+
+        when ready {
+            fire()
+        }
+    } else {
+        valid = false
+    }
+}

@@ -1,6 +1,7 @@
 use tapasco::tlkm::*;
 use std::collections::HashMap;
 use thiserror::Error;
+use clap::Parser;
 
 #[derive(Error, Debug)]
 pub enum TapascoError {
@@ -20,7 +21,29 @@ pub enum TapascoError {
     JobError(#[from] tapasco::job::Error),
 }
 
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+struct Cli {
+    /// Mode
+    #[arg(short, long, value_name = "FILE", default_value_t = 0)]
+    mode: u32,
+    /// Address
+    #[arg(short, long, value_name = "FILE", default_value_t = 0)]
+    addr: u32,
+    /// Count
+    #[arg(short, long, value_name = "FILE", default_value_t = 0)]
+    count: u32,
+    /// Data
+    #[arg(short, long, value_name = "FILE", default_value_t = 0)]
+    data: u32,
+    /// Jobs
+    #[arg(short, long, value_name = "FILE", default_value_t = 1)]
+    jobs: usize,
+}
+
 fn main() -> Result<(), TapascoError> {
+    let cli = Cli::parse();
+
     let tlkm = TLKM::new()?;
     println!("TLKM version is {}", tlkm.version()?);
     let devices = tlkm.device_enum(&HashMap::new())?;
@@ -35,21 +58,32 @@ fn main() -> Result<(), TapascoError> {
         );
         device.change_access(tapasco::tlkm::tlkm_access::TlkmAccessExclusive)?;
 
-        let pe_id = match device.get_pe_id("esa.informatik.tu-darmstadt.de:user:example:1.0") {
+        let pe_id = match device.get_pe_id("esa.informatik.tu-darmstadt.de:user:array_init_update_sum:1.0") {
             Ok(x) => x,
             Err(_e) => continue,
         };
         println!("pe found: {}", pe_id);
-        let mut pe = device.acquire_pe(pe_id)?;
 
         println!("start");
-        pe.start(vec![
-            tapasco::device::PEParameter::Single32(4),
-            tapasco::device::PEParameter::Single32(6),
-        ])?;
-        let (result, output) = pe.release(true, false)?;
-        println!("done {:?}", result);
+        let mut pes = Vec::new();
+        for _ in 0..cli.jobs {
+            let mut pe = device.acquire_pe(pe_id)?;
+            pe.start(vec![
+                tapasco::device::PEParameter::Single32(cli.mode),
+                tapasco::device::PEParameter::Single32(cli.addr),
+                tapasco::device::PEParameter::Single32(cli.count),
+                tapasco::device::PEParameter::Single32(cli.data),
+            ])?;
+            pes.push(pe);
+        }
+
+        println!("run");
+        for i in 0..cli.jobs {
+            let (result, _output) = pes[i].release(true, true)?;
+            println!("> {}", result);
+        }
     }
     println!("exit");
     Ok(())
 }
+

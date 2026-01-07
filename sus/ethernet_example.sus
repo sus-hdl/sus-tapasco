@@ -1,0 +1,140 @@
+
+module ethernet_example {
+    domain aclk
+    input bool aresetn
+
+    gen int ADDR_WIDTH = 12
+    gen int ATO = pow2#(E: ADDR_WIDTH)
+    gen int DATA_WIDTH = 32
+
+    axi4lite_ctrl_slave #(NUM_ARGS: 2, ADDR_WIDTH, DATA_WIDTH) axi_control
+    axi_control.aresetn = aresetn
+
+    // Export Axi4Lite interface
+    input  int#(FROM: 0, TO: ATO) s_axi_control_awaddr
+    input  bool[3]                s_axi_control_awprot
+    input  bool                   s_axi_control_awvalid
+    output bool                   s_axi_control_awready = axi_control.awready
+    input  bool[DATA_WIDTH]       s_axi_control_wdata
+    input  bool[DATA_WIDTH / 8]   s_axi_control_wstrb
+    input  bool                   s_axi_control_wvalid
+    output bool                   s_axi_control_wready  = axi_control.wready
+    output bool[2]                s_axi_control_bresp   = axi_control.bresp
+    output bool                   s_axi_control_bvalid  = axi_control.bvalid
+    input  bool                   s_axi_control_bready
+    input  int#(FROM: 0, TO: ATO) s_axi_control_araddr
+    input  bool[3]                s_axi_control_arprot
+    input  bool                   s_axi_control_arvalid
+    output bool                   s_axi_control_arready = axi_control.arready
+    output bool[DATA_WIDTH]       s_axi_control_rdata   = axi_control.rdata
+    output bool[2]                s_axi_control_rresp   = axi_control.rresp
+    output bool                   s_axi_control_rvalid  = axi_control.rvalid
+    input  bool                   s_axi_control_rready
+    output bool                   intr = axi_control.intr
+    axi_control.awaddr  = s_axi_control_awaddr
+    axi_control.awprot  = s_axi_control_awprot
+    axi_control.awvalid = s_axi_control_awvalid
+    axi_control.wdata   = s_axi_control_wdata
+    axi_control.wstrb   = s_axi_control_wstrb
+    axi_control.wvalid  = s_axi_control_wvalid
+    axi_control.bready  = s_axi_control_bready
+    axi_control.araddr  = s_axi_control_araddr
+    axi_control.arprot  = s_axi_control_arprot
+    axi_control.arvalid = s_axi_control_arvalid
+    axi_control.rready  = s_axi_control_rready
+
+    gen int AXIS_DATA_WIDTH = 512
+    gen int AXIS_DEST_WIDTH = 0
+    gen int AXIS_USER_WIDTH = 0
+
+    // eth rx 0
+    axi4stream_slave #(DATA_WIDTH: AXIS_DATA_WIDTH, USER_WIDTH: AXIS_USER_WIDTH, DEST_WIDTH: AXIS_DEST_WIDTH) eth_rx
+    output bool                    SAXIS0_tready = eth_rx.ready
+    input  bool                    SAXIS0_tvalid
+    input  bool[AXIS_DATA_WIDTH]   SAXIS0_tdata
+    input  bool[AXIS_DATA_WIDTH/8] SAXIS0_tkeep
+    input  bool[AXIS_DATA_WIDTH/8] SAXIS0_tstrb
+    input  bool[AXIS_USER_WIDTH]   SAXIS0_tuser
+    input  bool[AXIS_DEST_WIDTH]   SAXIS0_tdest
+    input  bool                    SAXIS0_tlast
+    eth_rx.valid = SAXIS0_tvalid
+    eth_rx.data = SAXIS0_tdata
+    eth_rx.keep = SAXIS0_tkeep
+    eth_rx.strb = SAXIS0_tstrb
+    eth_rx.user = SAXIS0_tuser
+    eth_rx.dest = SAXIS0_tdest
+    eth_rx.last = SAXIS0_tlast
+
+    // eth tx 0
+    axi4stream_master #(DATA_WIDTH: AXIS_DATA_WIDTH, USER_WIDTH: AXIS_USER_WIDTH, DEST_WIDTH: AXIS_DEST_WIDTH) eth_tx
+    input  bool                     MAXIS0_tready
+    output bool                     MAXIS0_tvalid = eth_tx.valid
+    output bool[AXIS_DATA_WIDTH]    MAXIS0_tdata = eth_tx.data
+    output bool[AXIS_DATA_WIDTH/8]  MAXIS0_tkeep = eth_tx.keep
+    output bool[AXIS_DATA_WIDTH/8]  MAXIS0_tstrb = eth_tx.strb
+    output bool[AXIS_USER_WIDTH]    MAXIS0_tuser = eth_tx.user
+    output bool[AXIS_DEST_WIDTH]    MAXIS0_tdest = eth_tx.dest
+    output bool                     MAXIS0_tlast = eth_tx.last
+    eth_tx.ready = MAXIS0_tready
+
+    domain eth1
+    // eth rx 1
+    output bool                   SAXIS1_tready'0 = true
+    input  bool                   SAXIS1_tvalid'0
+    input  bool[AXIS_DATA_WIDTH]  SAXIS1_tdata'0
+    input  bool                   SAXIS1_tlast'0
+    bool                   _SAXIS1_tvalid = SAXIS1_tvalid
+    bool[AXIS_DATA_WIDTH]  _SAXIS1_tdata = SAXIS1_tdata
+    bool                   _SAXIS1_tlast = SAXIS1_tlast
+
+    // eth tx 1
+    input  bool                   MAXIS1_tready'0
+    output bool                   MAXIS1_tvalid'0 = false
+    output bool[AXIS_DATA_WIDTH]  MAXIS1_tdata'0 = Repeat(false)
+    output bool                   MAXIS1_tlast'0 = false
+    bool                   _MAXIS1_tready = MAXIS1_tready
+
+    state bool receive = true
+    state bool running
+    state int#(FROM: 0, TO: pow2#(E: 32)) eth_rx_counter
+    state int#(FROM: 0, TO: pow2#(E: 32)) eth_tx_counter
+    state int#(FROM: 0, TO: pow2#(E: 32)) timout
+
+    // Actual logic
+    when axi_control.start {
+        eth_tx_counter = BitsToUInt(axi_control.args[0])
+        timout = BitsToUInt(axi_control.args[1])
+        running = true
+        eth_rx_counter = 0
+    }
+
+    when eth_tx_counter != 0 {
+        eth_tx.may_fire(UIntToBits(eth_tx_counter), 64'b0, 64'b0, 0'b0, 0'b0, (eth_tx_counter mod 64) == 1)
+        when eth_tx.fire {
+            eth_tx_counter = (eth_tx_counter - 1) mod pow2#(E: 32)
+        }
+    }
+
+    when receive {
+        eth_rx.may_fire()
+    }
+    when eth_rx.fire : bool [AXIS_DATA_WIDTH] _data, bool [AXIS_DATA_WIDTH/8] _keep, bool [AXIS_DATA_WIDTH/8] _strb, bool [AXIS_USER_WIDTH] _user, bool [AXIS_DEST_WIDTH] _dest, bool _last {
+        eth_rx_counter = (eth_rx_counter + 1) mod pow2#(E: 32)
+    }
+
+    when running {
+        when timout == 0 {
+            axi_control.write(UIntToBits(eth_rx_counter))
+            axi_control.finish()
+            running = false
+            eth_tx_counter = 0
+        } else {
+            timout = (timout - 1) mod pow2#(E: 32)
+        }
+    }
+
+    when !aresetn {
+        running = false
+        eth_tx_counter = 0
+    }
+}

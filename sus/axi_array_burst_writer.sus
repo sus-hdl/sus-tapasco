@@ -1,0 +1,197 @@
+
+/// A Bursting AXI Memory writer. Requires a FIFO
+module axi_array_burst_writer #(int ATO, int DATA_WIDTH, int MAY_WRITE_LATENCY) {
+    domain aclk
+    input bool aresetn'0
+
+    gen int AXI_WIDTH_BYTES = DATA_WIDTH / 8
+    gen int AxSIZE = clog2#(V: AXI_WIDTH_BYTES)
+
+    /// Check AXI_WIDTH is a power of two
+    assert#(C: pow2#(E: AxSIZE) * 8 == DATA_WIDTH)
+    /// AXI standard supported AXI_WIDTHs: 8 - 1024
+    assert#(C: (AxSIZE >= 0) & (AxSIZE < 8))
+
+    gen int MAX_AXI_ALIGNMENT = pow2#(E: 12) // 4kb page size, a burst cannot cross a 4K boundary
+    gen int MAX_BURST = MAX_AXI_ALIGNMENT / AXI_WIDTH_BYTES
+
+    if MAX_BURST > 256 { // Limited to 256 for BURST_INCR - AXI4. (16 if AXI3, but we only support AXI4)
+        MAX_BURST = 256
+    }
+
+    output bool                     awvalid'0
+    input  bool                     awready'0
+    output int#(FROM: 0, TO: ATO)   awaddr'0
+    output int#(FROM: 0, TO: 256)   awlen'0
+    output int#(FROM: 0, TO: 8)     awsize'0 = clog2#(V: DATA_WIDTH / 8)
+    output bool[2]                  awburst'0 = 2'b01 // BURST
+    output bool[4]                  awcache'0 = 4'b0010 // Not bufferable, but can be broken up (into 128-bit, or other)
+    output bool[3]                  awprot'0 = 3'b000 // Unprivileged, Secure, Data Access
+    output int#(FROM: 0, TO: 16)    awqos'0 = 0 // Lowest priority
+    output bool                     awlock'0 = false // NORMAL - No atomics
+    output int#(FROM: 0, TO: 16)    awregion'0 = 0 // Region 0
+    output bool                     wvalid'0
+    input  bool                     wready'0
+    output bool                     wlast'0
+    output bool[DATA_WIDTH]         wdata'0
+    output bool[DATA_WIDTH / 8]     wstrb'0
+    input  bool                     bvalid'0
+    input  bool[2]                  bresp'0
+    output bool                     bready'0
+    bool _bvalid = bvalid
+    bool[2] _bresp = bresp
+
+    // Address
+    state int#(FROM: 0, TO: ATO) addr
+    state int#(FROM: 0, TO: ATO) count
+    Counter#(MAX: 512) wr_counter
+    wr_counter.aresetn = aresetn
+
+    fifo #(DEPTH: 4, THRESHOLD: 0) data_burst_count_fifo
+    fifo #(DEPTH: 5, THRESHOLD: 0) resp_fifo
+    fifo #(DEPTH: 512, THRESHOLD: MAY_WRITE_LATENCY) wr_fifo
+    data_burst_count_fifo.aresetn = aresetn
+    int _data_burst_count_fifo_occupation = data_burst_count_fifo.occupation
+    resp_fifo.aresetn = aresetn
+    int _resp_fifo_occupation = resp_fifo.occupation
+    wr_fifo.aresetn = aresetn
+    int _wr_fifo_occupation = wr_fifo.occupation
+
+    output bool may_request_new_burst'0 = count == 0
+    action request_new_burst'0 : int#(FROM: 0, TO: ATO) _addr'0, int#(FROM: 0, TO: ATO) _count'0 {
+        addr = _addr
+        count = _count + 1 mod ATO
+    }
+
+    int#(FROM: 0, TO: MAX_BURST+1) next_burst_count
+    int#(FROM: 0, TO: MAX_BURST+1) next_burst_count_2
+    next_burst_count_2 = MAX_BURST - ((addr / AXI_WIDTH_BYTES) mod MAX_BURST)
+    when count < next_burst_count_2 {
+        next_burst_count = count mod MAX_BURST
+    } else {
+        next_burst_count = next_burst_count_2
+    }
+
+    awvalid = count != 0 & data_burst_count_fifo.may_push & resp_fifo.may_push & wr_counter.count >= next_burst_count & aresetn
+    awaddr = addr
+    awlen = next_burst_count - 1 mod MAX_BURST
+    when awvalid & awready {
+        addr = (addr + next_burst_count * AXI_WIDTH_BYTES) mod ATO
+        data_burst_count_fifo.push(next_burst_count)
+        resp_fifo.push(count == next_burst_count)
+        count = count - next_burst_count mod ATO
+        wr_counter.decr_by(next_burst_count)
+    }
+
+    // Data
+    state int#(FROM: 0, TO: MAX_BURST+1) data_burst_count_remaining
+
+    output bool may_write = wr_fifo.may_push
+    action write'0: bool[DATA_WIDTH] _data {
+        wr_fifo.push(_data)
+        wr_counter.incr()
+    }
+
+    wvalid = wr_fifo.may_pop & data_burst_count_remaining != 0 & aresetn
+    wdata  = wr_fifo.first
+    wlast  = data_burst_count_remaining == 1
+    wstrb  = Repeat(true)
+    when wvalid & wready {
+        wr_fifo.pop()
+        data_burst_count_remaining = data_burst_count_remaining - 1 mod MAX_BURST
+    }
+
+    when data_burst_count_remaining == 0 {
+        when data_burst_count_fifo.may_pop {
+            data_burst_count_remaining = data_burst_count_fifo.first
+            data_burst_count_fifo.pop()
+        }
+    }
+
+    // Response
+    trigger done'0
+    bready = resp_fifo.may_pop & aresetn
+    when bready & bvalid {
+        resp_fifo.pop()
+        when resp_fifo.first {
+            done()
+        }
+    }
+
+    when !aresetn {
+        data_burst_count_remaining = 0
+        count = 0
+    }
+
+}
+
+module fifo#(T, int DEPTH, int THRESHOLD) {
+    input bool aresetn'0
+
+    /// Basically the same as a FWFT XPM FIFO, just that we can't yet instantiate that one without an extra SV file. (#131)
+    state T[DEPTH] memory
+    state int#(FROM: 0, TO: DEPTH) wr_addr
+    state int#(FROM: 0, TO: DEPTH) rd_addr
+
+    int free_space = rd_addr - wr_addr - 1 mod DEPTH
+
+    output int occupation = (wr_addr - rd_addr) mod DEPTH
+    output bool may_push'0
+    may_push = free_space > THRESHOLD & aresetn
+    action push'0: T data'0 {
+        memory[wr_addr] = data
+        wr_addr = wr_addr + 1 mod DEPTH
+    }
+
+    output bool may_pop'0
+    may_pop = rd_addr != wr_addr & aresetn
+    output T first'0 = memory[rd_addr]
+    action pop'0 {
+        rd_addr = rd_addr + 1 mod DEPTH
+    }
+
+    when !aresetn {
+        wr_addr = 0
+        rd_addr = 0
+    }
+}
+
+module Counter#(int MAX) {
+    input bool aresetn'0
+
+    gen int BIT = clog2#(V: MAX)
+    gen int MOD = pow2#(E: BIT)
+
+    output state int#(FROM: 0, TO: MAX) count
+
+    int#(FROM: 0, TO: 2) incr_one
+    int#(FROM: 0, TO: 2) decr_one
+    int#(FROM: 0, TO: MAX) decr_count
+    int#(FROM: 0, TO: MAX) incr_count
+
+    incr_one = 0
+    action incr {
+        incr_one = 1
+    }
+
+    decr_one = 0
+    action decr {
+        decr_one = 1
+    }
+
+    decr_count = 0
+    action decr_by : int#(FROM: 0, TO: MAX) _decr_count {
+        decr_count = _decr_count
+    }
+
+    incr_count = 0
+    action incr_by : int#(FROM: 0, TO: MAX) _incr_count {
+        incr_count = _incr_count
+    }
+
+    count = (count + incr_one - decr_one - decr_count + incr_count) mod MOD
+
+    when !aresetn {
+        count = 0
+    }
+}

@@ -1,7 +1,7 @@
 SIM ?= icarus
 TOPLEVEL_LANG ?= verilog
 WAVES=1
-VERILOG_SOURCES += $(PWD)/../verilog/example.sv
+VERILOG_SOURCES += $(PWD)/../../verilog/example.sv
 TOPLEVEL = example
 MODULE = test
 

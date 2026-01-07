@@ -1,0 +1,244 @@
+
+module array_init_update_sum {
+    domain aclk
+    input bool aresetn
+
+    // ################################
+    // ## AXI4 Lite Control          ##
+    // ################################
+
+    gen int ADDR_WIDTH = 12
+    gen int ATO = pow2#(E: ADDR_WIDTH)
+    gen int DATA_WIDTH = 32
+
+    axi4lite_ctrl_slave #(NUM_ARGS: 4, ADDR_WIDTH, DATA_WIDTH) saxi_control
+    input  int#(FROM: 0, TO: ATO) saxi_control_awaddr
+    input  bool[3]                saxi_control_awprot
+    input  bool                   saxi_control_awvalid
+    output bool                   saxi_control_awready = saxi_control.awready
+    input  bool[DATA_WIDTH]       saxi_control_wdata
+    input  bool[DATA_WIDTH / 8]   saxi_control_wstrb
+    input  bool                   saxi_control_wvalid
+    output bool                   saxi_control_wready  = saxi_control.wready
+    output bool[2]                saxi_control_bresp   = saxi_control.bresp
+    output bool                   saxi_control_bvalid  = saxi_control.bvalid
+    input  bool                   saxi_control_bready
+    input  int#(FROM: 0, TO: ATO) saxi_control_araddr
+    input  bool[3]                saxi_control_arprot
+    input  bool                   saxi_control_arvalid
+    output bool                   saxi_control_arready = saxi_control.arready
+    output bool[DATA_WIDTH]       saxi_control_rdata   = saxi_control.rdata
+    output bool[2]                saxi_control_rresp   = saxi_control.rresp
+    output bool                   saxi_control_rvalid  = saxi_control.rvalid
+    input  bool                   saxi_control_rready
+    output bool                   intr = saxi_control.intr
+    saxi_control.aresetn = aresetn
+    saxi_control.awaddr  = saxi_control_awaddr
+    saxi_control.awprot  = saxi_control_awprot
+    saxi_control.awvalid = saxi_control_awvalid
+    saxi_control.wdata   = saxi_control_wdata
+    saxi_control.wstrb   = saxi_control_wstrb
+    saxi_control.wvalid  = saxi_control_wvalid
+    saxi_control.bready  = saxi_control_bready
+    saxi_control.araddr  = saxi_control_araddr
+    saxi_control.arprot  = saxi_control_arprot
+    saxi_control.arvalid = saxi_control_arvalid
+    saxi_control.rready  = saxi_control_rready
+
+    // ################################
+    // ## AXI4 Memory                ##
+    // ################################
+
+    gen int MAXI_ADDR_WIDTH = 32
+    gen int MAXI_ATO = pow2#(E: MAXI_ADDR_WIDTH)
+    gen int MAXI_DATA_WIDTH = 256
+
+    // axi interface
+    axi_array_burst_reader #(ATO: MAXI_ATO, DATA_WIDTH: MAXI_DATA_WIDTH) maxi_rd
+    output bool                              maxi_arvalid'0
+    input  bool                              maxi_arready'0
+    output int#(FROM: 0, TO: MAXI_ATO)       maxi_araddr'0
+    output int#(FROM: 0, TO: 256)            maxi_arlen'0
+    output int#(FROM: 0, TO: 8)              maxi_arsize'0
+    output bool[2]                           maxi_arburst'0
+    output bool[3]                           maxi_arprot'0
+    output bool[4]                           maxi_arcache'0
+    output int#(FROM: 0, TO: 16)             maxi_arqos'0
+    output bool                              maxi_arlock'0
+    output int#(FROM: 0, TO: 16)             maxi_arregion'0
+    input  bool                              maxi_rvalid'0
+    output bool                              maxi_rready'0
+    input  bool[MAXI_DATA_WIDTH]             maxi_rdata'0
+    input  bool[2]                           maxi_rresp'0
+    input  bool                              maxi_rlast'0
+    maxi_rd.aresetn = aresetn
+    maxi_arvalid = maxi_rd.arvalid
+    maxi_rd.arready = maxi_arready
+    maxi_araddr = maxi_rd.araddr
+    maxi_arlen = maxi_rd.arlen
+    maxi_arsize = maxi_rd.arsize
+    maxi_arburst = maxi_rd.arburst
+    maxi_arprot = maxi_rd.arprot
+    maxi_arcache = maxi_rd.arcache
+    maxi_arqos = maxi_rd.arqos
+    maxi_arlock = maxi_rd.arlock
+    maxi_arregion = maxi_rd.arregion
+    maxi_rd.rvalid = maxi_rvalid
+    maxi_rready = maxi_rd.rready
+    maxi_rd.rdata = maxi_rdata
+    maxi_rd.rresp = maxi_rresp
+    maxi_rd.rlast = maxi_rlast
+
+    axi_array_burst_writer #(ATO: MAXI_ATO, DATA_WIDTH: MAXI_DATA_WIDTH, MAY_WRITE_LATENCY: 128) maxi_wr
+    output bool                           maxi_awvalid'0
+    input  bool                           maxi_awready'0
+    output int#(FROM: 0, TO: MAXI_ATO)    maxi_awaddr'0
+    output int#(FROM: 0, TO: 256)         maxi_awlen'0
+    output int#(FROM: 0, TO: 8)           maxi_awsize'0
+    output bool[2]                        maxi_awburst'0
+    output bool[4]                        maxi_awcache'0
+    output bool[3]                        maxi_awprot'0
+    output int#(FROM: 0, TO: 16)          maxi_awqos'0
+    output bool                           maxi_awlock'0
+    output int#(FROM: 0, TO: 16)          maxi_awregion'0
+    output bool                           maxi_wvalid'0
+    input  bool                           maxi_wready'0
+    output bool                           maxi_wlast'0
+    output bool[MAXI_DATA_WIDTH]          maxi_wdata'0
+    output bool[MAXI_DATA_WIDTH / 8]      maxi_wstrb'0
+    input  bool                           maxi_bvalid'0
+    input  bool[2]                        maxi_bresp'0
+    output bool                           maxi_bready'0
+    maxi_wr.aresetn = aresetn
+    maxi_awvalid = maxi_wr.awvalid
+    maxi_wr.awready = maxi_awready
+    maxi_awaddr = maxi_wr.awaddr
+    maxi_awlen = maxi_wr.awlen
+    maxi_awsize = maxi_wr.awsize
+    maxi_awburst = maxi_wr.awburst
+    maxi_awcache = maxi_wr.awcache
+    maxi_awprot = maxi_wr.awprot
+    maxi_awqos = maxi_wr.awqos
+    maxi_awlock = maxi_wr.awlock
+    maxi_awregion = maxi_wr.awregion
+    maxi_wvalid = maxi_wr.wvalid
+    maxi_wr.wready = maxi_wready
+    maxi_wlast = maxi_wr.wlast
+    maxi_wdata = maxi_wr.wdata
+    maxi_wstrb = maxi_wr.wstrb
+    maxi_wr.bvalid = maxi_bvalid
+    maxi_wr.bresp = maxi_bresp
+    maxi_bready = maxi_wr.bready
+
+    // ################################
+    // ## Logic                      ##
+    // ################################
+
+    state bool running
+    state bool done
+    state bool r_req
+    state bool w_req
+    state bool w_done
+    state int#(FROM: 0, TO: pow2#(E: 32)) mode
+    state int#(FROM: 0, TO: pow2#(E: 32)) addr
+    state int#(FROM: 0, TO: pow2#(E: 32)) count
+    state int#(FROM: 0, TO: pow2#(E: 32)) data
+    state int#(FROM: 0, TO: pow2#(E: 32)) timer
+
+    when !running {
+        when saxi_control.start {
+            done = false
+            running = true
+            mode = BitsToUInt(saxi_control.args[0])
+            addr = BitsToUInt(saxi_control.args[1])
+            count = BitsToUInt(saxi_control.args[2])
+            data = BitsToUInt(saxi_control.args[3])
+            timer = 0
+            r_req = true
+            w_req = true
+            w_done = false
+        }
+    } else {
+        timer = timer + 1 mod pow2#(E: 32)
+
+        when mode == 0 {
+            // array init
+            when w_req & maxi_wr.may_request_new_burst {
+                maxi_wr.request_new_burst(addr, count)
+                w_req = false
+            }
+            when maxi_wr.may_write & !w_done {
+                count = count - 1 mod pow2#(E: 32)
+                bool[256] write_values'0
+                for int i in 0..8 {
+                    write_values[i*32 +: 32] = UIntToBits(data + i mod pow2#(E: 32))
+                }
+                data = (data + 8) mod pow2#(E: 32)
+                maxi_wr.write(write_values)
+                when count == 0 {
+                    w_done = true
+                }
+            }
+            when maxi_wr.done {
+                done = true
+            }
+        } else when mode == 1 {
+            // array update
+            when r_req & maxi_rd.may_request_new_burst {
+                maxi_rd.request_new_burst(addr, count)
+                r_req = false
+            }
+            when w_req & maxi_wr.may_request_new_burst {
+                maxi_wr.request_new_burst(addr, count)
+                w_req = false
+            }
+
+            when maxi_rd.may_read & maxi_wr.may_write {
+                maxi_rd.read()
+                bool[256] _data = maxi_rd.rd_data
+                bool[256] write_values'0
+                for int i in 0..8 {
+                    write_values[i*32 +: 32] = UIntToBits((BitsToUInt(_data[i*32 +: 32]) + data) mod pow2#(E: 32))
+                }
+                maxi_wr.write(write_values)
+            }
+            when maxi_wr.done {
+                done = true
+            }
+        } else when mode == 2 {
+            // array sum
+            when r_req & maxi_rd.may_request_new_burst {
+                maxi_rd.request_new_burst(addr, count)
+                r_req = false
+            }
+
+            when maxi_rd.may_read {
+                maxi_rd.read()
+                bool[256] _data = maxi_rd.rd_data
+                for int i in 0..8 {
+                    data = (data + BitsToUInt(_data[i*32 +: 32])) mod pow2#(E: 32)
+                }
+                when maxi_rd.rd_last {
+                    done = true
+                }
+            }
+        } else {
+            done = true
+        }
+    }
+    
+    when done {
+        running = false
+        done = false
+        r_req = false
+        w_req = false
+        saxi_control.write(UIntToBits(timer))
+        saxi_control.finish()
+    }
+
+    when !aresetn {
+        running = false
+        done = false
+    }
+
+}

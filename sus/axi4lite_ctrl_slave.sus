@@ -35,6 +35,7 @@ module axi4lite_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
     input bool[3] arprot'0
     input bool arvalid'0
     output bool arready'0 = false
+    bool[3] _arprot = arprot
 
     output bool[DATA_WIDTH] rdata'0
     output bool[2] rresp'0
@@ -45,6 +46,7 @@ module axi4lite_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
     input bool[3] awprot'0
     input bool awvalid'0
     output bool awready'0 = false
+    bool[3] _awprot = awprot
 
     input bool[DATA_WIDTH] wdata'0
     input bool[DATA_WIDTH / 8] wstrb'0
@@ -69,7 +71,7 @@ module axi4lite_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
 
     when awready & awvalid {
         waddr_valid = true
-        wsubaddr_valid = (awaddr % 16) == 0
+        wsubaddr_valid = (awaddr mod 16) == 0
         waddr = awaddr / REG_STRIDE
     }
     when wready & wvalid {
@@ -85,7 +87,7 @@ module axi4lite_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
             }
             // Data Write
             when (waddr >= FIRST_ARG) & (waddr < NUM_ARGS + FIRST_ARG) {
-                int write_idx = unsafe_int_cast#(FROM: FIRST_ARG, TO: FIRST_ARG + NUM_ARGS)(waddr) - FIRST_ARG
+                int write_idx = waddr - FIRST_ARG mod NUM_ARGS
                 for int strbi in 0..DATA_BYTES {
                     when wstrb[strbi] {
                         args[write_idx][strbi*8 +: 8] = wdata[strbi*8 +: 8]
@@ -114,7 +116,7 @@ module axi4lite_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
         rdata_data = Repeat(false)
 
         int raddr = araddr / REG_STRIDE
-        bool valid_addr = (araddr % 16) == 0
+        bool valid_addr = (araddr mod 16) == 0
         when valid_addr {
             // Result Read
             when raddr == 1 {
@@ -122,7 +124,7 @@ module axi4lite_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
             }
             // Args Read
             when (raddr >= FIRST_ARG) & (raddr < NUM_ARGS + FIRST_ARG) {
-                int read_idx = unsafe_int_cast#(FROM: FIRST_ARG, TO: FIRST_ARG + NUM_ARGS)(raddr) - FIRST_ARG
+                int read_idx = raddr - FIRST_ARG mod NUM_ARGS
                 rdata_data = args[read_idx]
             }
         }
@@ -138,7 +140,7 @@ module axi4lite_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
     }
 }
 
-module example {
+module ctrl_example {
     domain aclk
     input bool aresetn
 
@@ -187,7 +189,7 @@ module example {
         int a = BitsToUInt(axi_control.args[0])
         int b = BitsToUInt(axi_control.args[1])
 
-        int c = (a + b) % pow2#(E: 32)
+        int c = (a + b) mod pow2#(E: 32)
 
         axi_control.write(UIntToBits(c))
         axi_control.finish()

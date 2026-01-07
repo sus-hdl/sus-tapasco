@@ -36,8 +36,9 @@ def to_ipxact(core: Core) -> str:
     files = core.files
 
     target = f'ipxact/{name}.zip'
-    shutil.rmtree('ipxact')
-    os.mkdir('ipxact')
+    os.makedirs('ipxact', exist_ok=True)
+    if os.path.exists('ipxact/verilog'):
+        shutil.rmtree('ipxact/verilog')
     os.mkdir('ipxact/verilog')
     os.mkdir(f'ipxact/{name}')
 
