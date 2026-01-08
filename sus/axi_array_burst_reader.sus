@@ -63,7 +63,7 @@ module axi_array_burst_reader #(int ATO, int DATA_WIDTH) {
         next_burst_count = next_burst_count_2
     }
 
-    arvalid = count != 0 & data_burst_count_fifo.may_push
+    arvalid = count != 0 & data_burst_count_fifo.may_push & aresetn
     araddr = addr
     arlen = next_burst_count - 1 mod MAX_BURST
     when arvalid & arready {
@@ -87,7 +87,7 @@ module axi_array_burst_reader #(int ATO, int DATA_WIDTH) {
         }
     }
 
-    rready = rd_fifo.may_push & data_burst_count_remaining != 0
+    rready = rd_fifo.may_push & data_burst_count_remaining != 0 & aresetn
     when rready & rvalid {
         rd_fifo.push(rdata)
     }

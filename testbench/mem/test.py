@@ -160,11 +160,14 @@ class Axi4Memory:
                 length = int(self.awlen.value)
                 break
         self.awready.value = False
+        await (RisingEdge(self.clk))
         return addr, length
 
     async def handle_write(self, addr, length):
         # addr
         print(f"w {addr} {length}")
+        for i in range(10):
+            await (RisingEdge(self.clk))
 
         # data
         self.wready.value = True
@@ -188,10 +191,13 @@ class Axi4Memory:
         set_unassigned(self.bresp)
 
     async def handle_reads(self):
+        ar = cocotb.start_soon(self.get_next_ar())
         while True:
-            await self.handle_read()
+            addr, length = await ar
+            ar = cocotb.start_soon(self.get_next_ar())
+            await self.handle_read(addr, length)
 
-    async def handle_read(self):
+    async def get_next_ar(self):
         # addr
         self.arready.value = True
         while True:
@@ -201,7 +207,14 @@ class Axi4Memory:
                 length = int(self.arlen.value)
                 break
         self.arready.value = False
+        await (RisingEdge(self.clk))
+        return addr, length
+
+    async def handle_read(self, addr, length):
+        # addr
         print(f"r {addr} {length}")
+        for i in range(10):
+            await (RisingEdge(self.clk))
 
         # data
         self.rdata.value = self.memory[addr] if addr in self.memory else 0
