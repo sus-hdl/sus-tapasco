@@ -1,6 +1,6 @@
 
 module ethernet_example {
-    domain aclk
+    clock aclk
     input bool aresetn
 
     gen int ADDR_WIDTH = 12

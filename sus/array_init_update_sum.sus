@@ -1,6 +1,6 @@
 
 module array_init_update_sum {
-    domain aclk
+    clock aclk
     input bool aresetn
 
     // ################################

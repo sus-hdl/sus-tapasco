@@ -1,7 +1,7 @@
 
 /// A Bursting AXI Memory writer. Requires a FIFO
 module axi_array_burst_writer #(int ATO, int DATA_WIDTH, int MAY_WRITE_LATENCY) {
-    domain aclk
+    clock aclk
     input bool aresetn'0
 
     gen int AXI_WIDTH_BYTES = DATA_WIDTH / 8

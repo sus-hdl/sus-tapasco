@@ -9,7 +9,7 @@ module axi4lite_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
     gen int REG_STRIDE = 16
     gen int FIRST_ARG = 2
 
-    domain aclk
+    clock aclk
     input bool aresetn'0
 
     output state bool [DATA_WIDTH][NUM_ARGS] args'0
@@ -141,7 +141,7 @@ module axi4lite_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
 }
 
 module ctrl_example {
-    domain aclk
+    clock aclk
     input bool aresetn
 
     gen int ADDR_WIDTH = 12
