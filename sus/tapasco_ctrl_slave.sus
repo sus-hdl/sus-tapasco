@@ -1,30 +1,27 @@
 
 
-module tapasco_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
-    assert#(C: NUM_ARGS >= 0)
+module tapasco_ctrl_slave #(int INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
+    assert#(C: INPUT_REGS >= 0)
     assert#(C: ADDR_WIDTH >= 12)
-    assert#(C: DATA_WIDTH == 32 | DATA_WIDTH == 64)
+    assert#(C: AXI_WIDTH == 32 | AXI_WIDTH == 64)
     gen int ATO = pow2#(E: ADDR_WIDTH)
-    gen int DATA_BYTES = DATA_WIDTH / 8
+    gen int DATA_BYTES = AXI_WIDTH / 8
     gen int REG_STRIDE = 16
     gen int FIRST_ARG = 2
 
     domain user
-    output state bool[DATA_WIDTH][NUM_ARGS] input_regs'0
+    output state bool[AXI_WIDTH][INPUT_REGS] input_regs'0
 
-    state bool[DATA_WIDTH] result
-
-    action write'0 : bool[DATA_WIDTH] _data'0 {
-        result = _data
-    }
+    state bool[AXI_WIDTH] result
 
     trigger start'0
 
     domain axi
     output state bool intr'0
     intr = false
-    action finish'0 {
+    action finish'0 : bool[AXI_WIDTH] result_v {
         intr = true
+        result = result_v
     }
 
     gen bool[2] RESP_OKAY = [false, false]
@@ -36,7 +33,7 @@ module tapasco_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
     output bool arready'0 = false
     bool[3] _arprot = arprot
 
-    output bool[DATA_WIDTH] rdata'0
+    output bool[AXI_WIDTH] rdata'0
     output bool[2] rresp'0
     output bool rvalid'0 = false
     input bool rready'0
@@ -47,8 +44,8 @@ module tapasco_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
     output bool awready'0 = false
     bool[3] _awprot = awprot
 
-    input bool[DATA_WIDTH] wdata'0
-    input bool[DATA_WIDTH / 8] wstrb'0
+    input bool[AXI_WIDTH] wdata'0
+    input bool[AXI_WIDTH / 8] wstrb'0
     input bool wvalid'0
     output bool wready'0 = false
 
@@ -85,8 +82,8 @@ module tapasco_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
                 }
             }
             // Data Write
-            when (waddr >= FIRST_ARG) & (waddr < NUM_ARGS + FIRST_ARG) {
-                int write_idx = waddr - FIRST_ARG mod NUM_ARGS
+            when (waddr >= FIRST_ARG) & (waddr < INPUT_REGS + FIRST_ARG) {
+                int write_idx = waddr - FIRST_ARG mod INPUT_REGS
                 for int strbi in 0..DATA_BYTES {
                     when wstrb[strbi] {
                         input_regs[write_idx][strbi*8 +: 8] = wdata[strbi*8 +: 8]
@@ -101,7 +98,7 @@ module tapasco_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
 
     // Read transaction
     state bool rdata_valid
-    state bool[DATA_WIDTH] rdata_data
+    state bool[AXI_WIDTH] rdata_data
     state bool[2] rdata_resp
     rdata = rdata_data
     rresp = rdata_resp
@@ -122,8 +119,8 @@ module tapasco_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
                 rdata_data = result
             }
             // Args Read
-            when (raddr >= FIRST_ARG) & (raddr < NUM_ARGS + FIRST_ARG) {
-                int read_idx = raddr - FIRST_ARG mod NUM_ARGS
+            when (raddr >= FIRST_ARG) & (raddr < INPUT_REGS + FIRST_ARG) {
+                int read_idx = raddr - FIRST_ARG mod INPUT_REGS
                 rdata_data = input_regs[read_idx]
             }
         }
@@ -148,9 +145,9 @@ module ctrl_example {
 
     gen int ADDR_WIDTH = 12
     gen int ATO = pow2#(E: ADDR_WIDTH)
-    gen int DATA_WIDTH = 32
+    gen int AXI_WIDTH = 32
 
-    tapasco_ctrl_slave #(NUM_ARGS: 2, ADDR_WIDTH, DATA_WIDTH) axi_control
+    tapasco_ctrl_slave #(INPUT_REGS: 2, ADDR_WIDTH, AXI_WIDTH) axi_control
 
     domain axi
     // Export AXI4-Lite interface
@@ -158,8 +155,8 @@ module ctrl_example {
     input  bool[3]                s_axi_control_awprot
     input  bool                   s_axi_control_awvalid
     output bool                   s_axi_control_awready = axi_control.awready
-    input  bool[DATA_WIDTH]       s_axi_control_wdata
-    input  bool[DATA_WIDTH / 8]   s_axi_control_wstrb
+    input  bool[AXI_WIDTH]       s_axi_control_wdata
+    input  bool[AXI_WIDTH / 8]   s_axi_control_wstrb
     input  bool                   s_axi_control_wvalid
     output bool                   s_axi_control_wready  = axi_control.wready
     output bool[2]                s_axi_control_bresp   = axi_control.bresp
@@ -169,7 +166,7 @@ module ctrl_example {
     input  bool[3]                s_axi_control_arprot
     input  bool                   s_axi_control_arvalid
     output bool                   s_axi_control_arready = axi_control.arready
-    output bool[DATA_WIDTH]       s_axi_control_rdata   = axi_control.rdata
+    output bool[AXI_WIDTH]       s_axi_control_rdata   = axi_control.rdata
     output bool[2]                s_axi_control_rresp   = axi_control.rresp
     output bool                   s_axi_control_rvalid  = axi_control.rvalid
     input  bool                   s_axi_control_rready
@@ -193,8 +190,7 @@ module ctrl_example {
 
         int c = (a + b) mod pow2#(E: 32)
 
-        axi_control.write(UIntToBits(c))
-        axi_control.finish()
+        axi_control.finish(UIntToBits(c))
     }
 
     when !aresetn {

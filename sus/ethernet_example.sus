@@ -5,17 +5,17 @@ module ethernet_example {
 
     gen int ADDR_WIDTH = 12
     gen int ATO = pow2#(E: ADDR_WIDTH)
-    gen int DATA_WIDTH = 32
+    gen int AXI_WIDTH = 32
 
-    tapasco_ctrl_slave #(NUM_ARGS: 2, ADDR_WIDTH, DATA_WIDTH) axi_control
+    tapasco_ctrl_slave #(INPUT_REGS: 2, ADDR_WIDTH, AXI_WIDTH) axi_control
 
     // Export Axi4Lite interface
     input  int#(FROM: 0, TO: ATO) s_axi_control_awaddr
     input  bool[3]                s_axi_control_awprot
     input  bool                   s_axi_control_awvalid
     output bool                   s_axi_control_awready = axi_control.awready
-    input  bool[DATA_WIDTH]       s_axi_control_wdata
-    input  bool[DATA_WIDTH / 8]   s_axi_control_wstrb
+    input  bool[AXI_WIDTH]       s_axi_control_wdata
+    input  bool[AXI_WIDTH / 8]   s_axi_control_wstrb
     input  bool                   s_axi_control_wvalid
     output bool                   s_axi_control_wready  = axi_control.wready
     output bool[2]                s_axi_control_bresp   = axi_control.bresp
@@ -25,7 +25,7 @@ module ethernet_example {
     input  bool[3]                s_axi_control_arprot
     input  bool                   s_axi_control_arvalid
     output bool                   s_axi_control_arready = axi_control.arready
-    output bool[DATA_WIDTH]       s_axi_control_rdata   = axi_control.rdata
+    output bool[AXI_WIDTH]       s_axi_control_rdata   = axi_control.rdata
     output bool[2]                s_axi_control_rresp   = axi_control.rresp
     output bool                   s_axi_control_rvalid  = axi_control.rvalid
     input  bool                   s_axi_control_rready
@@ -123,8 +123,7 @@ module ethernet_example {
 
     when running {
         when timout == 0 {
-            axi_control.write(UIntToBits(eth_rx_counter))
-            axi_control.finish()
+            axi_control.finish(UIntToBits(eth_rx_counter))
             running = false
             eth_tx_counter = 0
         } else {
