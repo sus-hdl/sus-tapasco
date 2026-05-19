@@ -11,7 +11,7 @@ module array_init_update_sum {
     gen int ATO = pow2#(E: ADDR_WIDTH)
     gen int DATA_WIDTH = 32
 
-    axi4lite_ctrl_slave #(NUM_ARGS: 4, ADDR_WIDTH, DATA_WIDTH) saxi_control
+    tapasco_ctrl_slave #(NUM_ARGS: 4, ADDR_WIDTH, DATA_WIDTH) saxi_control
     input  int#(FROM: 0, TO: ATO) saxi_control_awaddr
     input  bool[3]                saxi_control_awprot
     input  bool                   saxi_control_awvalid
@@ -32,7 +32,6 @@ module array_init_update_sum {
     output bool                   saxi_control_rvalid  = saxi_control.rvalid
     input  bool                   saxi_control_rready
     output bool                   intr = saxi_control.intr
-    saxi_control.aresetn = aresetn
     saxi_control.awaddr  = saxi_control_awaddr
     saxi_control.awprot  = saxi_control_awprot
     saxi_control.awvalid = saxi_control_awvalid
@@ -149,10 +148,10 @@ module array_init_update_sum {
         when saxi_control.start {
             done = false
             running = true
-            mode = BitsToUInt(saxi_control.args[0])
-            addr = BitsToUInt(saxi_control.args[1])
-            count = BitsToUInt(saxi_control.args[2])
-            data = BitsToUInt(saxi_control.args[3])
+            mode = BitsToUInt(saxi_control.input_regs[0])
+            addr = BitsToUInt(saxi_control.input_regs[1])
+            count = BitsToUInt(saxi_control.input_regs[2])
+            data = BitsToUInt(saxi_control.input_regs[3])
             timer = 0
             r_req = true
             w_req = true
@@ -239,6 +238,7 @@ module array_init_update_sum {
     when !aresetn {
         running = false
         done = false
+        saxi_control.rst()
     }
 
 }

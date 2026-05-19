@@ -7,8 +7,7 @@ module ethernet_example {
     gen int ATO = pow2#(E: ADDR_WIDTH)
     gen int DATA_WIDTH = 32
 
-    axi4lite_ctrl_slave #(NUM_ARGS: 2, ADDR_WIDTH, DATA_WIDTH) axi_control
-    axi_control.aresetn = aresetn
+    tapasco_ctrl_slave #(NUM_ARGS: 2, ADDR_WIDTH, DATA_WIDTH) axi_control
 
     // Export Axi4Lite interface
     input  int#(FROM: 0, TO: ATO) s_axi_control_awaddr
@@ -102,8 +101,8 @@ module ethernet_example {
 
     // Actual logic
     when axi_control.start {
-        eth_tx_counter = BitsToUInt(axi_control.args[0])
-        timout = BitsToUInt(axi_control.args[1])
+        eth_tx_counter = BitsToUInt(axi_control.input_regs[0])
+        timout = BitsToUInt(axi_control.input_regs[1])
         running = true
         eth_rx_counter = 0
     }
@@ -136,5 +135,6 @@ module ethernet_example {
     when !aresetn {
         running = false
         eth_tx_counter = 0
+        axi_control.rst()
     }
 }

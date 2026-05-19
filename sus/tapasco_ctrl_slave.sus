@@ -1,6 +1,6 @@
 
 
-module axi4lite_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
+module tapasco_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
     assert#(C: NUM_ARGS >= 0)
     assert#(C: ADDR_WIDTH >= 12)
     assert#(C: DATA_WIDTH == 32 | DATA_WIDTH == 64)
@@ -9,19 +9,18 @@ module axi4lite_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
     gen int REG_STRIDE = 16
     gen int FIRST_ARG = 2
 
-    clock aclk
-    input bool aresetn'0
+    domain user
+    output state bool[DATA_WIDTH][NUM_ARGS] input_regs'0
 
-    output state bool [DATA_WIDTH][NUM_ARGS] args'0
+    state bool[DATA_WIDTH] result
 
-    state bool [DATA_WIDTH] result
-
-    action write'0 : bool [DATA_WIDTH] _data'0 {
+    action write'0 : bool[DATA_WIDTH] _data'0 {
         result = _data
     }
 
     trigger start'0
 
+    domain axi
     output state bool intr'0
     intr = false
     action finish'0 {
@@ -64,7 +63,7 @@ module axi4lite_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
     state bool[2] bresp_resp
     state bool bresp_valid
 
-    awready = !waddr_valid & aresetn // Force low on reset
+    awready = !waddr_valid // Is forced low by rst
     wready = waddr_valid & !bresp_valid // Already low by reset
     bvalid = bresp_valid
     bresp = bresp_resp
@@ -90,7 +89,7 @@ module axi4lite_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
                 int write_idx = waddr - FIRST_ARG mod NUM_ARGS
                 for int strbi in 0..DATA_BYTES {
                     when wstrb[strbi] {
-                        args[write_idx][strbi*8 +: 8] = wdata[strbi*8 +: 8]
+                        input_regs[write_idx][strbi*8 +: 8] = wdata[strbi*8 +: 8]
                     }
                 }
             }
@@ -102,12 +101,12 @@ module axi4lite_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
 
     // Read transaction
     state bool rdata_valid
-    state bool[32] rdata_data
+    state bool[DATA_WIDTH] rdata_data
     state bool[2] rdata_resp
     rdata = rdata_data
     rresp = rdata_resp
 
-    arready = !rdata_valid & aresetn // Force low on reset
+    arready = !rdata_valid // Is forced low by rst
     rvalid = rdata_valid // Already low by reset
 
     when arready & arvalid {
@@ -125,7 +124,7 @@ module axi4lite_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
             // Args Read
             when (raddr >= FIRST_ARG) & (raddr < NUM_ARGS + FIRST_ARG) {
                 int read_idx = raddr - FIRST_ARG mod NUM_ARGS
-                rdata_data = args[read_idx]
+                rdata_data = input_regs[read_idx]
             }
         }
     }
@@ -133,10 +132,13 @@ module axi4lite_ctrl_slave #(int NUM_ARGS, int ADDR_WIDTH, int DATA_WIDTH) {
         rdata_valid = false
     }
 
-    when !aresetn {
+    domain reset
+    action rst {
         waddr_valid = false
         bresp_valid = false
         rdata_valid = false
+        awready = false // Force low on reset
+        arready = false
     }
 }
 
@@ -148,9 +150,9 @@ module ctrl_example {
     gen int ATO = pow2#(E: ADDR_WIDTH)
     gen int DATA_WIDTH = 32
 
-    axi4lite_ctrl_slave #(NUM_ARGS: 2, ADDR_WIDTH, DATA_WIDTH) axi_control
-    axi_control.aresetn = aresetn
+    tapasco_ctrl_slave #(NUM_ARGS: 2, ADDR_WIDTH, DATA_WIDTH) axi_control
 
+    domain axi
     // Export AXI4-Lite interface
     input  int#(FROM: 0, TO: ATO) s_axi_control_awaddr
     input  bool[3]                s_axi_control_awprot
@@ -186,12 +188,16 @@ module ctrl_example {
 
     // Actual logic
     when axi_control.start {
-        int a = BitsToUInt(axi_control.args[0])
-        int b = BitsToUInt(axi_control.args[1])
+        int a = BitsToUInt(axi_control.input_regs[0])
+        int b = BitsToUInt(axi_control.input_regs[1])
 
         int c = (a + b) mod pow2#(E: 32)
 
         axi_control.write(UIntToBits(c))
         axi_control.finish()
+    }
+
+    when !aresetn {
+        axi_control.rst()
     }
 }
