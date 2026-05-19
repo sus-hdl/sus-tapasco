@@ -7,7 +7,7 @@ module ethernet_example {
     gen int ATO = pow2#(E: ADDR_WIDTH)
     gen int AXI_WIDTH = 32
 
-    tapasco_ctrl_slave #(INPUT_REGS: 2, ADDR_WIDTH, AXI_WIDTH) axi_control
+    tapasco_ctrl_slave #(NUM_INPUT_REGS: 2, ADDR_WIDTH, AXI_WIDTH) axi_control
 
     // Export Axi4Lite interface
     input  int#(FROM: 0, TO: ATO) s_axi_control_awaddr

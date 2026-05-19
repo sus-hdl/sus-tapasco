@@ -1,7 +1,7 @@
 
 
-module tapasco_ctrl_slave #(int INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
-    assert#(C: INPUT_REGS >= 0)
+module tapasco_ctrl_slave #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
+    assert#(C: NUM_INPUT_REGS >= 0)
     assert#(C: ADDR_WIDTH >= 12)
     assert#(C: AXI_WIDTH == 32 | AXI_WIDTH == 64)
     gen int ATO = pow2#(E: ADDR_WIDTH)
@@ -10,7 +10,7 @@ module tapasco_ctrl_slave #(int INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
     gen int FIRST_ARG = 2
 
     domain user
-    output state bool[AXI_WIDTH][INPUT_REGS] input_regs'0
+    output state bool[AXI_WIDTH][NUM_INPUT_REGS] input_regs'0
 
     state bool[AXI_WIDTH] result
 
@@ -24,7 +24,7 @@ module tapasco_ctrl_slave #(int INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
         result = result_v
     }
 
-    gen bool[2] RESP_OKAY = [false, false]
+    gen bool[2] RESP_OKAY = 2'b00
 
     // AXI signals
     input int#(FROM: 0, TO: ATO) araddr'0
@@ -54,7 +54,7 @@ module tapasco_ctrl_slave #(int INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
     input bool bready'0
 
     // Write transaction
-    state int#(FROM: 0, TO: ATO) waddr
+    state int#(FROM: 0, TO: ATO / REG_STRIDE) waddr
     state bool waddr_valid
     state bool wsubaddr_valid
     state bool[2] bresp_resp
@@ -82,8 +82,8 @@ module tapasco_ctrl_slave #(int INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
                 }
             }
             // Data Write
-            when (waddr >= FIRST_ARG) & (waddr < INPUT_REGS + FIRST_ARG) {
-                int write_idx = waddr - FIRST_ARG mod INPUT_REGS
+            when (waddr >= FIRST_ARG) & (waddr < NUM_INPUT_REGS + FIRST_ARG) {
+                int write_idx = IntNarrow#(FROM: 0, TO: NUM_INPUT_REGS)(waddr - FIRST_ARG)
                 for int strbi in 0..DATA_BYTES {
                     when wstrb[strbi] {
                         input_regs[write_idx][strbi*8 +: 8] = wdata[strbi*8 +: 8]
@@ -119,8 +119,8 @@ module tapasco_ctrl_slave #(int INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
                 rdata_data = result
             }
             // Args Read
-            when (raddr >= FIRST_ARG) & (raddr < INPUT_REGS + FIRST_ARG) {
-                int read_idx = raddr - FIRST_ARG mod INPUT_REGS
+            when (raddr >= FIRST_ARG) & (raddr < NUM_INPUT_REGS + FIRST_ARG) {
+                int read_idx = IntNarrow#(FROM: 0, TO: NUM_INPUT_REGS)(raddr - FIRST_ARG)
                 rdata_data = input_regs[read_idx]
             }
         }
@@ -147,7 +147,7 @@ module ctrl_example {
     gen int ATO = pow2#(E: ADDR_WIDTH)
     gen int AXI_WIDTH = 32
 
-    tapasco_ctrl_slave #(INPUT_REGS: 2, ADDR_WIDTH, AXI_WIDTH) axi_control
+    tapasco_ctrl_slave #(NUM_INPUT_REGS: 2, ADDR_WIDTH, AXI_WIDTH) axi_control
 
     domain axi
     // Export AXI4-Lite interface

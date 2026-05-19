@@ -11,7 +11,7 @@ module array_init_update_sum {
     gen int ATO = pow2#(E: ADDR_WIDTH)
     gen int AXI_WIDTH = 32
 
-    tapasco_ctrl_slave #(INPUT_REGS: 4, ADDR_WIDTH, AXI_WIDTH) saxi_control
+    tapasco_ctrl_slave #(NUM_INPUT_REGS: 4, ADDR_WIDTH, AXI_WIDTH) saxi_control
     input  int#(FROM: 0, TO: ATO) saxi_control_awaddr
     input  bool[3]                saxi_control_awprot
     input  bool                   saxi_control_awvalid
