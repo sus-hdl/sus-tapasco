@@ -54,35 +54,47 @@ module tapasco_ctrl_slave #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
     input bool bready'0
 
     // Write transaction
-    state int#(FROM: 0, TO: ATO / REG_STRIDE) waddr
-    state bool waddr_valid
-    state bool wsubaddr_valid
+    state bool stored_write_addr_valid
+    state int stored_write_addr
+    state bool is_write_addr_aligned
 
-    awready = !waddr_valid // Is forced low by rst
-    wready = waddr_valid & !bvalid // Already low by reset
+    awready = !stored_write_addr_valid // Is forced low by rst
 
-    when awready & awvalid {
-        waddr_valid = true
-        wsubaddr_valid = (awaddr mod 16) == 0
-        waddr = awaddr / REG_STRIDE
+    when awready { // &awvalid is implicit, because awready goes low on stored_write_addr_valid
+        stored_write_addr_valid = awvalid
+        is_write_addr_aligned = (awaddr mod 16) == 0
+        stored_write_addr = awaddr / REG_STRIDE
     }
-    when wready & wvalid {
-        waddr_valid = false
+
+    state bool stored_write_data_valid
+    state bool[AXI_WIDTH] stored_write_data
+    state bool[AXI_WIDTH/8] stored_write_data_strb
+
+    wready = !stored_write_data_valid // Is forced low by rst
+    when wready { // &wvalid is implicit, because wready goes low on stored_write_data_valid
+        stored_write_data_valid = wvalid
+        stored_write_data = wdata
+        stored_write_data_strb = wstrb
+    }
+
+    when stored_write_addr_valid & stored_write_data_valid & !bvalid {
+        stored_write_addr_valid = false
+        stored_write_data_valid = false
         bvalid = true
 
         bresp = RESP_OKAY
-        when wsubaddr_valid {
-            when waddr == 0 {
-                when wstrb[0] & wdata[0] {
+        when is_write_addr_aligned {
+            when stored_write_addr == 0 {
+                when stored_write_data_strb[0] & stored_write_data[0] {
                     start()
                 }
             }
             // Data Write
-            when (waddr >= FIRST_ARG) & (waddr < NUM_INPUT_REGS + FIRST_ARG) {
-                int write_idx = IntNarrow#(FROM: 0, TO: NUM_INPUT_REGS)(waddr - FIRST_ARG)
+            when (stored_write_addr >= FIRST_ARG) & (stored_write_addr < NUM_INPUT_REGS + FIRST_ARG) {
+                int write_idx = IntNarrow#(FROM: 0, TO: NUM_INPUT_REGS)(stored_write_addr - FIRST_ARG)
                 for int strbi in 0..DATA_BYTES {
-                    when wstrb[strbi] {
-                        input_regs[write_idx][strbi*8 +: 8] = wdata[strbi*8 +: 8]
+                    when stored_write_data_strb[strbi] {
+                        input_regs[write_idx][strbi*8 +: 8] = stored_write_data[strbi*8 +: 8]
                     }
                 }
             }
@@ -93,23 +105,31 @@ module tapasco_ctrl_slave #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
     }
 
     // Read transaction
-    arready = !rvalid // Is forced low by rst
+    state bool stored_read_addr_valid
+    state int stored_read_addr
+    state bool is_read_addr_aligned
 
-    when arready & arvalid {
+    arready = !stored_read_addr_valid // Is forced low by rst
+
+    when arready { // &arvalid implicitly, because arready goes low when stored_read_addr_valid
+        stored_read_addr_valid = arvalid
+        stored_read_addr = araddr / REG_STRIDE
+        is_read_addr_aligned = (araddr mod 16) == 0
+    }
+    when stored_read_addr_valid {
+        stored_read_addr_valid = false
         rvalid = true
         rresp = RESP_OKAY
         rdata = Repeat(false)
 
-        int raddr = araddr / REG_STRIDE
-        bool valid_addr = (araddr mod 16) == 0
-        when valid_addr {
+        when is_read_addr_aligned {
             // Result Read
-            when raddr == 1 {
+            when stored_read_addr == 1 {
                 rdata = result
             }
             // Args Read
-            when (raddr >= FIRST_ARG) & (raddr < NUM_INPUT_REGS + FIRST_ARG) {
-                int read_idx = IntNarrow#(FROM: 0, TO: NUM_INPUT_REGS)(raddr - FIRST_ARG)
+            when (stored_read_addr >= FIRST_ARG) & (stored_read_addr < NUM_INPUT_REGS + FIRST_ARG) {
+                int read_idx = IntNarrow#(FROM: 0, TO: NUM_INPUT_REGS)(stored_read_addr - FIRST_ARG)
                 rdata = input_regs[read_idx]
             }
         }
@@ -120,9 +140,10 @@ module tapasco_ctrl_slave #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
 
     domain reset
     action rst {
-        waddr_valid = false
+        stored_write_addr_valid = false
         bvalid = false
         rvalid = false
+        wready = false
         awready = false // Force low on reset
         arready = false
     }
