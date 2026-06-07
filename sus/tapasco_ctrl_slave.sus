@@ -12,6 +12,10 @@ module tapasco_ctrl_slave #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
     domain user
     output state bool[AXI_WIDTH][NUM_INPUT_REGS] input_regs'0
 
+    /// Take a copy of the data that is written, such that it can be stored in a LUTRAM for easy retrieval with reading. 
+    /// Frees up the routing overhead of bringing the register values back. 
+    state bool[AXI_WIDTH][NUM_INPUT_REGS] input_regs_replication_mem
+
     state bool[AXI_WIDTH] result
 
     trigger start'0
@@ -95,6 +99,7 @@ module tapasco_ctrl_slave #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
                 for int strbi in 0..DATA_BYTES {
                     when stored_write_data_strb[strbi] {
                         input_regs[write_idx][strbi*8 +: 8] = stored_write_data[strbi*8 +: 8]
+                        input_regs_replication_mem[write_idx][strbi*8 +: 8] = stored_write_data[strbi*8 +: 8]
                     }
                 }
             }
@@ -130,7 +135,7 @@ module tapasco_ctrl_slave #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
             // Args Read
             when (stored_read_addr >= FIRST_ARG) & (stored_read_addr < NUM_INPUT_REGS + FIRST_ARG) {
                 int read_idx = IntNarrow#(FROM: 0, TO: NUM_INPUT_REGS)(stored_read_addr - FIRST_ARG)
-                rdata = input_regs[read_idx]
+                rdata = input_regs_replication_mem[read_idx]
             }
         }
     }
