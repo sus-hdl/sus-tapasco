@@ -30,40 +30,36 @@ module tapasco_ctrl_slave #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
     input int#(FROM: 0, TO: ATO) araddr'0
     input bool[3] arprot'0
     input bool arvalid'0
-    output bool arready'0 = false
+    output bool arready'0
     bool[3] _arprot = arprot
 
-    output bool[AXI_WIDTH] rdata'0
-    output bool[2] rresp'0
-    output bool rvalid'0 = false
+    output state bool[AXI_WIDTH] rdata'0
+    output state bool[2] rresp'0
+    output state bool rvalid'0
     input bool rready'0
 
     input int#(FROM: 0, TO: ATO) awaddr'0
     input bool[3] awprot'0
     input bool awvalid'0
-    output bool awready'0 = false
+    output bool awready'0
     bool[3] _awprot = awprot
 
     input bool[AXI_WIDTH] wdata'0
     input bool[AXI_WIDTH / 8] wstrb'0
     input bool wvalid'0
-    output bool wready'0 = false
+    output bool wready'0
 
-    output bool[2] bresp'0
-    output bool bvalid'0 = false
+    output state bool[2] bresp'0
+    output state bool bvalid'0
     input bool bready'0
 
     // Write transaction
     state int#(FROM: 0, TO: ATO / REG_STRIDE) waddr
     state bool waddr_valid
     state bool wsubaddr_valid
-    state bool[2] bresp_resp
-    state bool bresp_valid
 
     awready = !waddr_valid // Is forced low by rst
-    wready = waddr_valid & !bresp_valid // Already low by reset
-    bvalid = bresp_valid
-    bresp = bresp_resp
+    wready = waddr_valid & !bvalid // Already low by reset
 
     when awready & awvalid {
         waddr_valid = true
@@ -72,9 +68,9 @@ module tapasco_ctrl_slave #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
     }
     when wready & wvalid {
         waddr_valid = false
-        bresp_valid = true
+        bvalid = true
 
-        bresp_resp = RESP_OKAY
+        bresp = RESP_OKAY
         when wsubaddr_valid {
             when waddr == 0 {
                 when wstrb[0] & wdata[0] {
@@ -93,47 +89,40 @@ module tapasco_ctrl_slave #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
         }
     }
     when bready & bvalid {
-        bresp_valid = false
+        bvalid = false
     }
 
     // Read transaction
-    state bool rdata_valid
-    state bool[AXI_WIDTH] rdata_data
-    state bool[2] rdata_resp
-    rdata = rdata_data
-    rresp = rdata_resp
-
-    arready = !rdata_valid // Is forced low by rst
-    rvalid = rdata_valid // Already low by reset
+    arready = !rvalid // Is forced low by rst
 
     when arready & arvalid {
-        rdata_valid = true
-        rdata_resp = RESP_OKAY
-        rdata_data = Repeat(false)
+        rvalid = true
+        rresp = RESP_OKAY
+        rdata = Repeat(false)
 
         int raddr = araddr / REG_STRIDE
         bool valid_addr = (araddr mod 16) == 0
         when valid_addr {
             // Result Read
             when raddr == 1 {
-                rdata_data = result
+                rdata = result
             }
             // Args Read
             when (raddr >= FIRST_ARG) & (raddr < NUM_INPUT_REGS + FIRST_ARG) {
                 int read_idx = IntNarrow#(FROM: 0, TO: NUM_INPUT_REGS)(raddr - FIRST_ARG)
-                rdata_data = input_regs[read_idx]
+                rdata = input_regs[read_idx]
             }
         }
     }
     when rready & rvalid {
-        rdata_valid = false
+        rvalid = false
     }
 
     domain reset
     action rst {
         waddr_valid = false
-        bresp_valid = false
-        rdata_valid = false
+        bvalid = false
+        rvalid = false
         awready = false // Force low on reset
         arready = false
     }
