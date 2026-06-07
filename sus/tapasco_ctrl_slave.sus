@@ -141,6 +141,8 @@ module tapasco_ctrl_slave #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
     domain reset
     action rst {
         stored_write_addr_valid = false
+        stored_write_data_valid = false
+        stored_read_addr_valid = false
         bvalid = false
         rvalid = false
         wready = false
