@@ -116,7 +116,7 @@ module tapasco_ctrl_slave #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
         stored_read_addr = araddr / REG_STRIDE
         is_read_addr_aligned = (araddr mod 16) == 0
     }
-    when stored_read_addr_valid {
+    when stored_read_addr_valid & !rvalid {
         stored_read_addr_valid = false
         rvalid = true
         rresp = RESP_OKAY
