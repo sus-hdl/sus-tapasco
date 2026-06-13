@@ -214,3 +214,254 @@ module ctrl_example {
         axi_control.rst()
     }
 }
+
+
+
+
+module tapasco_ctrl_slave_noregs #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
+    assert#(C: NUM_INPUT_REGS >= 0)
+    assert#(C: ADDR_WIDTH >= 12)
+    assert#(C: AXI_WIDTH == 32 | AXI_WIDTH == 64)
+    gen int ATO = pow2#(E: ADDR_WIDTH)
+    gen int DATA_BYTES = AXI_WIDTH / 8
+    gen int REG_STRIDE = 16
+    gen int FIRST_ARG = 2
+
+    domain user
+    /// Take a copy of the data that is written, such that it can be stored in a LUTRAM for easy retrieval with reading. 
+    /// Frees up the routing overhead of bringing the register values back. 
+    state bool[AXI_WIDTH][NUM_INPUT_REGS] input_regs_replication_mem
+
+    state bool[AXI_WIDTH] result
+
+    trigger set_reg : int#(FROM: 0, TO: (1 << ADDR_WIDTH) / REG_STRIDE) reg_idx, bool[AXI_WIDTH] data
+    trigger start'0
+
+    domain axi
+    output state bool intr'0
+    intr = false
+    action finish'0 : bool[AXI_WIDTH] result_v {
+        intr = true
+        result = result_v
+    }
+
+    gen bool[2] RESP_OKAY = 2'b00
+
+    // AXI signals
+    input int#(FROM: 0, TO: ATO) araddr'0
+    input bool[3] arprot'0
+    input bool arvalid'0
+    output bool arready'0
+    bool[3] _arprot = arprot
+
+    output state bool[AXI_WIDTH] rdata'0
+    output state bool[2] rresp'0
+    output state bool rvalid'0
+    input bool rready'0
+
+    input int#(FROM: 0, TO: ATO) awaddr'0
+    input bool[3] awprot'0
+    input bool awvalid'0
+    output bool awready'0
+    bool[3] _awprot = awprot
+
+    input bool[AXI_WIDTH] wdata'0
+    input bool[AXI_WIDTH / 8] wstrb'0
+    input bool wvalid'0
+    output bool wready'0
+
+    output state bool[2] bresp'0
+    output state bool bvalid'0
+    input bool bready'0
+
+    // Write transaction
+    state bool stored_write_addr_valid
+    state int stored_write_addr
+    state bool is_write_addr_aligned
+
+    awready = !stored_write_addr_valid // Is forced low by rst
+
+    when awready { // &awvalid is implicit, because awready goes low on stored_write_addr_valid
+        stored_write_addr_valid = awvalid
+        is_write_addr_aligned = (awaddr mod 16) == 0
+        stored_write_addr = awaddr / REG_STRIDE
+    }
+
+    state bool stored_write_data_valid
+    state bool[AXI_WIDTH] stored_write_data
+    state bool[AXI_WIDTH/8] stored_write_data_strb
+
+    wready = !stored_write_data_valid // Is forced low by rst
+    when wready { // &wvalid is implicit, because wready goes low on stored_write_data_valid
+        stored_write_data_valid = wvalid
+        stored_write_data = wdata
+        stored_write_data_strb = wstrb
+    }
+
+    state bool input_regs_replication_mem_was_written
+    state int stored_write_addr_out_set_reg
+    state bool stored_start_set_reg
+    state bool stored_write_data_set_reg
+    input_regs_replication_mem_was_written = false
+    when stored_write_addr_valid & stored_write_data_valid & !bvalid {
+        stored_write_addr_valid = false
+        stored_write_data_valid = false
+        bvalid = true
+
+        bresp = RESP_OKAY
+        when is_write_addr_aligned {
+            input_regs_replication_mem_was_written = false
+            when stored_write_addr == 0 {
+                when stored_write_data_strb[0] & stored_write_data[0] {
+                    input_regs_replication_mem_was_written = true
+                    stored_start_set_reg = true
+                } else {
+                    stored_start_set_reg = false
+                }
+            }
+            // Data Write
+            when (stored_write_addr >= FIRST_ARG) & (stored_write_addr < NUM_INPUT_REGS + FIRST_ARG) {
+                input_regs_replication_mem_was_written = true
+                int write_idx = IntNarrow#(FROM: 0, TO: NUM_INPUT_REGS)(stored_write_addr - FIRST_ARG)
+                for int strbi in 0..DATA_BYTES {
+                    when stored_write_data_strb[strbi] {
+                        input_regs_replication_mem[write_idx][strbi*8 +: 8] = stored_write_data[strbi*8 +: 8]
+                    }
+                }
+                stored_write_data_set_reg = true
+            } else {
+                stored_write_data_set_reg = false
+            }
+            stored_write_addr_out_set_reg = stored_write_addr
+        }
+    }
+    when input_regs_replication_mem_was_written {
+        bool[AXI_WIDTH] read_data
+        when stored_write_addr_out_set_reg == 0 {
+            read_data = RepeatGen#(T: type bool, SIZE: AXI_WIDTH, V: false)
+            when stored_start_set_reg {
+                start()
+                read_data[0] = true
+            }
+        } else when stored_write_data_set_reg {
+            read_data = input_regs_replication_mem[IntNarrow#(FROM: 0, TO: NUM_INPUT_REGS)(stored_write_addr_out_set_reg - FIRST_ARG)]
+        } else {
+            read_data = RepeatGen#(T: type bool, SIZE: AXI_WIDTH, V: false)
+        }
+        set_reg(stored_write_addr_out_set_reg, read_data)
+    }
+    when bready & bvalid {
+        bvalid = false
+    }
+
+    // Read transaction
+    state bool stored_read_addr_valid
+    state int stored_read_addr
+    state bool is_read_addr_aligned
+
+    arready = !stored_read_addr_valid // Is forced low by rst
+
+    when arready { // &arvalid implicitly, because arready goes low when stored_read_addr_valid
+        stored_read_addr_valid = arvalid
+        stored_read_addr = araddr / REG_STRIDE
+        is_read_addr_aligned = (araddr mod 16) == 0
+    }
+    when stored_read_addr_valid & !rvalid {
+        stored_read_addr_valid = false
+        rvalid = true
+        rresp = RESP_OKAY
+        rdata = Repeat(false)
+
+        when is_read_addr_aligned {
+            // Result Read
+            when stored_read_addr == 1 {
+                rdata = result
+            }
+            // Args Read
+            when (stored_read_addr >= FIRST_ARG) & (stored_read_addr < NUM_INPUT_REGS + FIRST_ARG) {
+                int read_idx = IntNarrow#(FROM: 0, TO: NUM_INPUT_REGS)(stored_read_addr - FIRST_ARG)
+                rdata = input_regs_replication_mem[read_idx]
+            }
+        }
+    }
+    when rready & rvalid {
+        rvalid = false
+    }
+
+    domain reset
+    action rst {
+        stored_write_addr_valid = false
+        stored_write_data_valid = false
+        stored_read_addr_valid = false
+        bvalid = false
+        rvalid = false
+        wready = false
+        awready = false // Force low on reset
+        arready = false
+    }
+}
+
+module ctrl_example_noregs {
+    clock aclk
+    input bool aresetn
+
+    gen int ADDR_WIDTH = 12
+    gen int ATO = pow2#(E: ADDR_WIDTH)
+    gen int AXI_WIDTH = 32
+
+    tapasco_ctrl_slave_noregs #(NUM_INPUT_REGS: 2, ADDR_WIDTH, AXI_WIDTH) axi_control
+
+    domain axi
+    // Export AXI4-Lite interface
+    input  int#(FROM: 0, TO: ATO) s_axi_control_awaddr
+    input  bool[3]                s_axi_control_awprot
+    input  bool                   s_axi_control_awvalid
+    output bool                   s_axi_control_awready = axi_control.awready
+    input  bool[AXI_WIDTH]       s_axi_control_wdata
+    input  bool[AXI_WIDTH / 8]   s_axi_control_wstrb
+    input  bool                   s_axi_control_wvalid
+    output bool                   s_axi_control_wready  = axi_control.wready
+    output bool[2]                s_axi_control_bresp   = axi_control.bresp
+    output bool                   s_axi_control_bvalid  = axi_control.bvalid
+    input  bool                   s_axi_control_bready
+    input  int#(FROM: 0, TO: ATO) s_axi_control_araddr
+    input  bool[3]                s_axi_control_arprot
+    input  bool                   s_axi_control_arvalid
+    output bool                   s_axi_control_arready = axi_control.arready
+    output bool[AXI_WIDTH]       s_axi_control_rdata   = axi_control.rdata
+    output bool[2]                s_axi_control_rresp   = axi_control.rresp
+    output bool                   s_axi_control_rvalid  = axi_control.rvalid
+    input  bool                   s_axi_control_rready
+    output bool                   intr = axi_control.intr
+    axi_control.awaddr  = s_axi_control_awaddr
+    axi_control.awprot  = s_axi_control_awprot
+    axi_control.awvalid = s_axi_control_awvalid
+    axi_control.wdata   = s_axi_control_wdata
+    axi_control.wstrb   = s_axi_control_wstrb
+    axi_control.wvalid  = s_axi_control_wvalid
+    axi_control.bready  = s_axi_control_bready
+    axi_control.araddr  = s_axi_control_araddr
+    axi_control.arprot  = s_axi_control_arprot
+    axi_control.arvalid = s_axi_control_arvalid
+    axi_control.rready  = s_axi_control_rready
+
+    state bool[AXI_WIDTH][2] input_regs
+    when axi_control.set_reg : int reg_idx, bool[AXI_WIDTH] data {
+        for int strbi in 0..AXI_WIDTH / 8 {
+            input_regs[reg_idx - 2 mod 2] = data
+        }
+    }
+    // Actual logic
+    when axi_control.start {
+        int a = BitsToUInt(input_regs[0])
+        int b = BitsToUInt(input_regs[1])
+
+        int c = (a + b) mod pow2#(E: 32)
+
+        axi_control.finish(UIntToBits(c))
+    }
+
+    when !aresetn {
+        axi_control.rst()
+    }
+}
