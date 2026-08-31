@@ -32,10 +32,8 @@ module tapasco_ctrl_slave #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
 
     // AXI signals
     input int#(FROM: 0, TO: ATO) araddr'0
-    input bool[3] arprot'0
     input bool arvalid'0
     output bool arready'0
-    bool[3] _arprot = arprot
 
     output state bool[AXI_WIDTH] rdata'0
     output state bool[2] rresp'0
@@ -43,10 +41,8 @@ module tapasco_ctrl_slave #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
     input bool rready'0
 
     input int#(FROM: 0, TO: ATO) awaddr'0
-    input bool[3] awprot'0
     input bool awvalid'0
     output bool awready'0
-    bool[3] _awprot = awprot
 
     input bool[AXI_WIDTH] wdata'0
     input bool[AXI_WIDTH / 8] wstrb'0
@@ -169,7 +165,6 @@ module ctrl_example {
     domain axi
     // Export AXI4-Lite interface
     input  int#(FROM: 0, TO: ATO) s_axi_control_awaddr
-    input  bool[3]                s_axi_control_awprot
     input  bool                   s_axi_control_awvalid
     output bool                   s_axi_control_awready = axi_control.awready
     input  bool[AXI_WIDTH]       s_axi_control_wdata
@@ -180,7 +175,6 @@ module ctrl_example {
     output bool                   s_axi_control_bvalid  = axi_control.bvalid
     input  bool                   s_axi_control_bready
     input  int#(FROM: 0, TO: ATO) s_axi_control_araddr
-    input  bool[3]                s_axi_control_arprot
     input  bool                   s_axi_control_arvalid
     output bool                   s_axi_control_arready = axi_control.arready
     output bool[AXI_WIDTH]       s_axi_control_rdata   = axi_control.rdata
@@ -189,14 +183,12 @@ module ctrl_example {
     input  bool                   s_axi_control_rready
     output bool                   intr = axi_control.intr
     axi_control.awaddr  = s_axi_control_awaddr
-    axi_control.awprot  = s_axi_control_awprot
     axi_control.awvalid = s_axi_control_awvalid
     axi_control.wdata   = s_axi_control_wdata
     axi_control.wstrb   = s_axi_control_wstrb
     axi_control.wvalid  = s_axi_control_wvalid
     axi_control.bready  = s_axi_control_bready
     axi_control.araddr  = s_axi_control_araddr
-    axi_control.arprot  = s_axi_control_arprot
     axi_control.arvalid = s_axi_control_arvalid
     axi_control.rready  = s_axi_control_rready
 
