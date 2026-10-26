@@ -12,7 +12,7 @@ module array_init_update_sum {
     gen int AXI_WIDTH = 32
 
     tapasco_ctrl_slave #(NUM_INPUT_REGS: 4, ADDR_WIDTH, AXI_WIDTH) saxi_control
-    input  int#(FROM: 0, TO: ATO) saxi_control_awaddr
+    input  int#(0..ATO) saxi_control_awaddr
     input  bool[3]                saxi_control_awprot
     input  bool                   saxi_control_awvalid
     output bool                   saxi_control_awready = saxi_control.awready
@@ -23,7 +23,7 @@ module array_init_update_sum {
     output bool[2]                saxi_control_bresp   = saxi_control.bresp
     output bool                   saxi_control_bvalid  = saxi_control.bvalid
     input  bool                   saxi_control_bready
-    input  int#(FROM: 0, TO: ATO) saxi_control_araddr
+    input  int#(0..ATO) saxi_control_araddr
     input  bool[3]                saxi_control_arprot
     input  bool                   saxi_control_arvalid
     output bool                   saxi_control_arready = saxi_control.arready
@@ -56,15 +56,15 @@ module array_init_update_sum {
     axi_array_burst_reader #(ATO: MAXI_ATO, DATA_WIDTH: MAXI_DATA_WIDTH) maxi_rd
     output bool                              maxi_arvalid'0
     input  bool                              maxi_arready'0
-    output int#(FROM: 0, TO: MAXI_ATO)       maxi_araddr'0
-    output int#(FROM: 0, TO: 256)            maxi_arlen'0
-    output int#(FROM: 0, TO: 8)              maxi_arsize'0
+    output int#(0..MAXI_ATO)       maxi_araddr'0
+    output int#(0..256)            maxi_arlen'0
+    output int#(0..8)              maxi_arsize'0
     output bool[2]                           maxi_arburst'0
     output bool[3]                           maxi_arprot'0
     output bool[4]                           maxi_arcache'0
-    output int#(FROM: 0, TO: 16)             maxi_arqos'0
+    output int#(0..16)             maxi_arqos'0
     output bool                              maxi_arlock'0
-    output int#(FROM: 0, TO: 16)             maxi_arregion'0
+    output int#(0..16)             maxi_arregion'0
     input  bool                              maxi_rvalid'0
     output bool                              maxi_rready'0
     input  bool[MAXI_DATA_WIDTH]             maxi_rdata'0
@@ -91,15 +91,15 @@ module array_init_update_sum {
     axi_array_burst_writer #(ATO: MAXI_ATO, DATA_WIDTH: MAXI_DATA_WIDTH, MAY_WRITE_LATENCY: 128) maxi_wr
     output bool                           maxi_awvalid'0
     input  bool                           maxi_awready'0
-    output int#(FROM: 0, TO: MAXI_ATO)    maxi_awaddr'0
-    output int#(FROM: 0, TO: 256)         maxi_awlen'0
-    output int#(FROM: 0, TO: 8)           maxi_awsize'0
+    output int#(0..MAXI_ATO)    maxi_awaddr'0
+    output int#(0..256)         maxi_awlen'0
+    output int#(0..8)           maxi_awsize'0
     output bool[2]                        maxi_awburst'0
     output bool[4]                        maxi_awcache'0
     output bool[3]                        maxi_awprot'0
-    output int#(FROM: 0, TO: 16)          maxi_awqos'0
+    output int#(0..16)          maxi_awqos'0
     output bool                           maxi_awlock'0
-    output int#(FROM: 0, TO: 16)          maxi_awregion'0
+    output int#(0..16)          maxi_awregion'0
     output bool                           maxi_wvalid'0
     input  bool                           maxi_wready'0
     output bool                           maxi_wlast'0
@@ -138,11 +138,11 @@ module array_init_update_sum {
     state bool r_req
     state bool w_req
     state bool w_done
-    state int#(FROM: 0, TO: pow2#(E: 32)) mode
-    state int#(FROM: 0, TO: pow2#(E: 32)) addr
-    state int#(FROM: 0, TO: pow2#(E: 32)) count
-    state int#(FROM: 0, TO: pow2#(E: 32)) data
-    state int#(FROM: 0, TO: pow2#(E: 32)) timer
+    state int#(0..pow2#(E: 32)) mode
+    state int#(0..pow2#(E: 32)) addr
+    state int#(0..pow2#(E: 32)) count
+    state int#(0..pow2#(E: 32)) data
+    state int#(0..pow2#(E: 32)) timer
 
     when !running {
         when saxi_control.start {
@@ -170,7 +170,7 @@ module array_init_update_sum {
                 count = count - 1 mod pow2#(E: 32)
                 bool[256] write_values'0
                 for int i in 0..8 {
-                    write_values[i*32 +: 32] = UIntToBits(data + i mod pow2#(E: 32))
+                    write_values[i*32 +.. 32] = UIntToBits(data + i mod pow2#(E: 32))
                 }
                 data = (data + 8) mod pow2#(E: 32)
                 maxi_wr.write(write_values)
@@ -197,7 +197,7 @@ module array_init_update_sum {
                 bool[256] _data = maxi_rd.rd_data
                 bool[256] write_values'0
                 for int i in 0..8 {
-                    write_values[i*32 +: 32] = UIntToBits((BitsToUInt(_data[i*32 +: 32]) + data) mod pow2#(E: 32))
+                    write_values[i*32 +.. 32] = UIntToBits((BitsToUInt(_data[i*32 +.. 32]) + data) mod pow2#(E: 32))
                 }
                 maxi_wr.write(write_values)
             }
@@ -215,7 +215,7 @@ module array_init_update_sum {
                 maxi_rd.read()
                 bool[256] _data = maxi_rd.rd_data
                 for int i in 0..8 {
-                    data = (data + BitsToUInt(_data[i*32 +: 32])) mod pow2#(E: 32)
+                    data = (data + BitsToUInt(_data[i*32 +.. 32])) mod pow2#(E: 32)
                 }
                 when maxi_rd.rd_last {
                     done = true

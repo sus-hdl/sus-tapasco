@@ -10,7 +10,7 @@ module ethernet_example {
     tapasco_ctrl_slave #(NUM_INPUT_REGS: 2, ADDR_WIDTH, AXI_WIDTH) axi_control
 
     // Export Axi4Lite interface
-    input  int#(FROM: 0, TO: ATO) s_axi_control_awaddr
+    input  int#(0..ATO) s_axi_control_awaddr
     input  bool[3]                s_axi_control_awprot
     input  bool                   s_axi_control_awvalid
     output bool                   s_axi_control_awready = axi_control.awready
@@ -21,7 +21,7 @@ module ethernet_example {
     output bool[2]                s_axi_control_bresp   = axi_control.bresp
     output bool                   s_axi_control_bvalid  = axi_control.bvalid
     input  bool                   s_axi_control_bready
-    input  int#(FROM: 0, TO: ATO) s_axi_control_araddr
+    input  int#(0..ATO) s_axi_control_araddr
     input  bool[3]                s_axi_control_arprot
     input  bool                   s_axi_control_arvalid
     output bool                   s_axi_control_arready = axi_control.arready
@@ -95,9 +95,9 @@ module ethernet_example {
 
     state bool receive = true
     state bool running
-    state int#(FROM: 0, TO: pow2#(E: 32)) eth_rx_counter
-    state int#(FROM: 0, TO: pow2#(E: 32)) eth_tx_counter
-    state int#(FROM: 0, TO: pow2#(E: 32)) timout
+    state int#(0..pow2#(E: 32)) eth_rx_counter
+    state int#(0..pow2#(E: 32)) eth_tx_counter
+    state int#(0..pow2#(E: 32)) timout
 
     // Actual logic
     when axi_control.start {

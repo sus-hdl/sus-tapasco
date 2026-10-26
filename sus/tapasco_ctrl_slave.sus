@@ -31,7 +31,7 @@ module tapasco_ctrl_slave #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
     gen bool[2] RESP_OKAY = 2'b00
 
     // AXI signals
-    input int#(FROM: 0, TO: ATO) araddr'0
+    input int#(0..ATO) araddr'0
     input bool arvalid'0
     output bool arready'0
 
@@ -40,7 +40,7 @@ module tapasco_ctrl_slave #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
     output state bool rvalid'0
     input bool rready'0
 
-    input int#(FROM: 0, TO: ATO) awaddr'0
+    input int#(0..ATO) awaddr'0
     input bool awvalid'0
     output bool awready'0
 
@@ -94,8 +94,8 @@ module tapasco_ctrl_slave #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
                 int write_idx = IntNarrow#(FROM: 0, TO: NUM_INPUT_REGS)(stored_write_addr - FIRST_ARG)
                 for int strbi in 0..DATA_BYTES {
                     when stored_write_data_strb[strbi] {
-                        input_regs[write_idx][strbi*8 +: 8] = stored_write_data[strbi*8 +: 8]
-                        input_regs_replication_mem[write_idx][strbi*8 +: 8] = stored_write_data[strbi*8 +: 8]
+                        input_regs[write_idx][strbi*8 +.. 8] = stored_write_data[strbi*8 +.. 8]
+                        input_regs_replication_mem[write_idx][strbi*8 +.. 8] = stored_write_data[strbi*8 +.. 8]
                     }
                 }
             }
@@ -164,7 +164,7 @@ module ctrl_example {
 
     domain axi
     // Export AXI4-Lite interface
-    input  int#(FROM: 0, TO: ATO) s_axi_control_awaddr
+    input  int#(0..ATO) s_axi_control_awaddr
     input  bool                   s_axi_control_awvalid
     output bool                   s_axi_control_awready = axi_control.awready
     input  bool[AXI_WIDTH]       s_axi_control_wdata
@@ -174,7 +174,7 @@ module ctrl_example {
     output bool[2]                s_axi_control_bresp   = axi_control.bresp
     output bool                   s_axi_control_bvalid  = axi_control.bvalid
     input  bool                   s_axi_control_bready
-    input  int#(FROM: 0, TO: ATO) s_axi_control_araddr
+    input  int#(0..ATO) s_axi_control_araddr
     input  bool                   s_axi_control_arvalid
     output bool                   s_axi_control_arready = axi_control.arready
     output bool[AXI_WIDTH]       s_axi_control_rdata   = axi_control.rdata
@@ -226,7 +226,7 @@ module tapasco_ctrl_slave_noregs #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_W
 
     state bool[AXI_WIDTH] result
 
-    trigger set_reg : int#(FROM: 0, TO: (1 << ADDR_WIDTH) / REG_STRIDE) reg_idx, bool[AXI_WIDTH] data
+    trigger set_reg : int#(0..(1 << ADDR_WIDTH) / REG_STRIDE) reg_idx, bool[AXI_WIDTH] data
     trigger start'0
 
     domain axi
@@ -240,7 +240,7 @@ module tapasco_ctrl_slave_noregs #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_W
     gen bool[2] RESP_OKAY = 2'b00
 
     // AXI signals
-    input int#(FROM: 0, TO: ATO) araddr'0
+    input int#(0..ATO) araddr'0
     input bool[3] arprot'0
     input bool arvalid'0
     output bool arready'0
@@ -251,7 +251,7 @@ module tapasco_ctrl_slave_noregs #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_W
     output state bool rvalid'0
     input bool rready'0
 
-    input int#(FROM: 0, TO: ATO) awaddr'0
+    input int#(0..ATO) awaddr'0
     input bool[3] awprot'0
     input bool awvalid'0
     output bool awready'0
@@ -317,7 +317,7 @@ module tapasco_ctrl_slave_noregs #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_W
                 int write_idx = IntNarrow#(FROM: 0, TO: NUM_INPUT_REGS)(stored_write_addr - FIRST_ARG)
                 for int strbi in 0..DATA_BYTES {
                     when stored_write_data_strb[strbi] {
-                        input_regs_replication_mem[write_idx][strbi*8 +: 8] = stored_write_data[strbi*8 +: 8]
+                        input_regs_replication_mem[write_idx][strbi*8 +.. 8] = stored_write_data[strbi*8 +.. 8]
                     }
                 }
                 stored_write_data_set_reg = true
@@ -405,7 +405,7 @@ module ctrl_example_noregs {
 
     domain axi
     // Export AXI4-Lite interface
-    input  int#(FROM: 0, TO: ATO) s_axi_control_awaddr
+    input  int#(0..ATO) s_axi_control_awaddr
     input  bool[3]                s_axi_control_awprot
     input  bool                   s_axi_control_awvalid
     output bool                   s_axi_control_awready = axi_control.awready
@@ -416,7 +416,7 @@ module ctrl_example_noregs {
     output bool[2]                s_axi_control_bresp   = axi_control.bresp
     output bool                   s_axi_control_bvalid  = axi_control.bvalid
     input  bool                   s_axi_control_bready
-    input  int#(FROM: 0, TO: ATO) s_axi_control_araddr
+    input  int#(0..ATO) s_axi_control_araddr
     input  bool[3]                s_axi_control_arprot
     input  bool                   s_axi_control_arvalid
     output bool                   s_axi_control_arready = axi_control.arready
