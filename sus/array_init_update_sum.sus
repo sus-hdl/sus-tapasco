@@ -13,7 +13,6 @@ module array_init_update_sum {
 
     tapasco_ctrl_slave #(NUM_INPUT_REGS: 4, ADDR_WIDTH, AXI_WIDTH) saxi_control
     input  int#(0..ATO) saxi_control_awaddr
-    input  bool[3]                saxi_control_awprot
     input  bool                   saxi_control_awvalid
     output bool                   saxi_control_awready = saxi_control.awready
     input  bool[AXI_WIDTH]       saxi_control_wdata
@@ -24,7 +23,6 @@ module array_init_update_sum {
     output bool                   saxi_control_bvalid  = saxi_control.bvalid
     input  bool                   saxi_control_bready
     input  int#(0..ATO) saxi_control_araddr
-    input  bool[3]                saxi_control_arprot
     input  bool                   saxi_control_arvalid
     output bool                   saxi_control_arready = saxi_control.arready
     output bool[AXI_WIDTH]       saxi_control_rdata   = saxi_control.rdata
@@ -33,14 +31,12 @@ module array_init_update_sum {
     input  bool                   saxi_control_rready
     output bool                   intr = saxi_control.intr
     saxi_control.awaddr  = saxi_control_awaddr
-    saxi_control.awprot  = saxi_control_awprot
     saxi_control.awvalid = saxi_control_awvalid
     saxi_control.wdata   = saxi_control_wdata
     saxi_control.wstrb   = saxi_control_wstrb
     saxi_control.wvalid  = saxi_control_wvalid
     saxi_control.bready  = saxi_control_bready
     saxi_control.araddr  = saxi_control_araddr
-    saxi_control.arprot  = saxi_control_arprot
     saxi_control.arvalid = saxi_control_arvalid
     saxi_control.rready  = saxi_control_rready
 

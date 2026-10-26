@@ -11,7 +11,6 @@ module ethernet_example {
 
     // Export Axi4Lite interface
     input  int#(0..ATO) s_axi_control_awaddr
-    input  bool[3]                s_axi_control_awprot
     input  bool                   s_axi_control_awvalid
     output bool                   s_axi_control_awready = axi_control.awready
     input  bool[AXI_WIDTH]       s_axi_control_wdata
@@ -22,7 +21,6 @@ module ethernet_example {
     output bool                   s_axi_control_bvalid  = axi_control.bvalid
     input  bool                   s_axi_control_bready
     input  int#(0..ATO) s_axi_control_araddr
-    input  bool[3]                s_axi_control_arprot
     input  bool                   s_axi_control_arvalid
     output bool                   s_axi_control_arready = axi_control.arready
     output bool[AXI_WIDTH]       s_axi_control_rdata   = axi_control.rdata
@@ -31,14 +29,12 @@ module ethernet_example {
     input  bool                   s_axi_control_rready
     output bool                   intr = axi_control.intr
     axi_control.awaddr  = s_axi_control_awaddr
-    axi_control.awprot  = s_axi_control_awprot
     axi_control.awvalid = s_axi_control_awvalid
     axi_control.wdata   = s_axi_control_wdata
     axi_control.wstrb   = s_axi_control_wstrb
     axi_control.wvalid  = s_axi_control_wvalid
     axi_control.bready  = s_axi_control_bready
     axi_control.araddr  = s_axi_control_araddr
-    axi_control.arprot  = s_axi_control_arprot
     axi_control.arvalid = s_axi_control_arvalid
     axi_control.rready  = s_axi_control_rready
 
