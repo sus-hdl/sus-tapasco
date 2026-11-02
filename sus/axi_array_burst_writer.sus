@@ -95,7 +95,7 @@ module axi_array_burst_writer #(int ATO, int DATA_WIDTH, int MAY_WRITE_LATENCY) 
     wvalid = wr_fifo.may_pop & data_burst_count_remaining != 0 & aresetn
     wdata  = wr_fifo.first
     wlast  = data_burst_count_remaining == 1
-    wstrb  = Repeat(true)
+    wstrb  = [true ...]
     when wvalid & wready {
         wr_fifo.pop()
         data_burst_count_remaining = data_burst_count_remaining - 1 mod MAX_BURST

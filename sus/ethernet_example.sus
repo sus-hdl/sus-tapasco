@@ -85,7 +85,7 @@ module ethernet_example {
     // eth tx 1
     input  bool                   MAXIS1_tready'0
     output bool                   MAXIS1_tvalid'0 = false
-    output bool[AXIS_DATA_WIDTH]  MAXIS1_tdata'0 = Repeat(false)
+    output bool[AXIS_DATA_WIDTH]  MAXIS1_tdata'0 = [false ...]
     output bool                   MAXIS1_tlast'0 = false
     bool                   _MAXIS1_tready = MAXIS1_tready
 

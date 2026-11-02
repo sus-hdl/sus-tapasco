@@ -121,7 +121,7 @@ module tapasco_ctrl_slave #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_WIDTH) {
         stored_read_addr_valid = false
         rvalid = true
         rresp = RESP_OKAY
-        rdata = Repeat(false)
+        rdata = [false ...]
 
         when is_read_addr_aligned {
             // Result Read
@@ -330,7 +330,7 @@ module tapasco_ctrl_slave_noregs #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_W
     when input_regs_replication_mem_was_written {
         bool[AXI_WIDTH] read_data
         when stored_write_addr_out_set_reg == 0 {
-            read_data = RepeatGen#(T: type bool, SIZE: AXI_WIDTH, V: false)
+            read_data = [false ...]
             when stored_start_set_reg {
                 start()
                 read_data[0] = true
@@ -338,7 +338,7 @@ module tapasco_ctrl_slave_noregs #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_W
         } else when stored_write_data_set_reg {
             read_data = input_regs_replication_mem[IntNarrow#(FROM: 0, TO: NUM_INPUT_REGS)(stored_write_addr_out_set_reg - FIRST_ARG)]
         } else {
-            read_data = RepeatGen#(T: type bool, SIZE: AXI_WIDTH, V: false)
+            read_data = [false ...]
         }
         set_reg(stored_write_addr_out_set_reg, read_data)
     }
@@ -362,7 +362,7 @@ module tapasco_ctrl_slave_noregs #(int NUM_INPUT_REGS, int ADDR_WIDTH, int AXI_W
         stored_read_addr_valid = false
         rvalid = true
         rresp = RESP_OKAY
-        rdata = Repeat(false)
+        rdata = [false ...]
 
         when is_read_addr_aligned {
             // Result Read
